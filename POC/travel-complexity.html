@@ -1,0 +1,491 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Travel complexity by country</title>
+<style>
+  body {
+    font-family: -apple-system, Helvetica, Arial, sans-serif;
+    background: #f5f5f5;
+    padding: 20px;
+    font-size: 12px;
+  }
+  h1 {
+    color: #222;
+    font-size: 18px;
+  }
+  .legend {
+    margin: 10px 0 16px 0;
+  }
+  .legend span {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    color: white;
+    margin-right: 6px;
+    font-size: 11px;
+  }
+  .hint {
+    color: #666;
+    margin: 6px 0 14px 0;
+  }
+  table {
+    border-collapse: collapse;
+    background: white;
+  }
+  th, td {
+    border: 1px solid #ccc;
+    padding: 6px 8px;
+    text-align: left;
+    vertical-align: top;
+  }
+  th {
+    background: #eee;
+    font-size: 11px;
+    text-align: center;
+  }
+  td.country {
+    font-weight: bold;
+    white-space: nowrap;
+    background: #fafafa;
+  }
+  td.cell {
+    color: white;
+    font-size: 12px;
+    min-width: 130px;
+    cursor: help;
+  }
+  .easy { background: #27ae60; }
+  .moderate { background: #e67e22; }
+  .hard { background: #c0392b; }
+  .note {
+    color: #777;
+    font-size: 11px;
+    margin-top: 16px;
+    max-width: 700px;
+  }
+</style>
+</head>
+<body>
+
+<h1>Travel complexity by country</h1>
+<div class="legend">
+  <span class="easy">Easy</span>
+  <span class="moderate">Moderate</span>
+  <span class="hard">Hard / restrictive</span>
+  &nbsp; (hover over a cell for full details)
+</div>
+
+<table id="table"></table>
+
+<div class="note">
+  Note: visa rules, carnet requirements and import regulations change frequently and vary by nationality of the traveler and origin country of the vehicle.
+  Treat this as a planning starting point, not a final source — always verify with the relevant embassy/customs authority shortly before travel.
+</div>
+
+<script>
+const fields = [
+  { key: "visa",        label: "Visa" },
+  { key: "particular",  label: "Particularities" },
+  { key: "stayLength",  label: "Default stay (person)" },
+  { key: "extendStay",  label: "Extending stay (person)" },
+  { key: "carnet",      label: "Carnet de Passage" },
+  { key: "vehicleStay", label: "Vehicle import duration" },
+  { key: "extendVeh",   label: "Extending vehicle stay" },
+  { key: "modernVeh",   label: "Modern vehicle friendliness" },
+  { key: "roadQuality", label: "Road quality" },
+];
+
+const countries = [
+  {
+    name: "Turkey",
+    visa:        { level: "easy",     label: "Visa-free / e-visa", detail: "Most EU/US/UK citizens enter visa-free up to 90 days. Some nationalities need an e-Visa, applied for online via the official evisa.gov.tr portal — approval typically takes minutes." },
+    particular:  { level: "easy",     label: "None", detail: "Self-driving is unrestricted nationwide. A few military/border zones in the southeast may have local access restrictions." },
+    stayLength:  { level: "easy",     label: "90 days / 180", detail: "90 days within any 180-day rolling period for most visa-free/e-visa nationalities." },
+    extendStay:  { level: "moderate", label: "Leave & re-enter", detail: "Extending from inside the country is generally not possible once the 90/180 allowance is used; most travelers exit and re-enter after the 180-day window resets, or apply for a residence permit for longer stays." },
+    carnet:      { level: "easy",     label: "Not required", detail: "A Carnet de Passage is not required for temporary vehicle import; a temporary import stamp is issued in the passport/vehicle documents at the border, though carrying a carnet can speed up the process." },
+    vehicleStay: { level: "easy",     label: "Matches visa (90 days)", detail: "The vehicle's permitted stay is tied to the driver's visa/stay duration, typically up to 90 days." },
+    extendVeh:   { level: "moderate", label: "Via customs office", detail: "Extensions are possible through a local customs office but require paperwork and are not guaranteed; many travelers instead export and re-import the vehicle." },
+    modernVeh:   { level: "easy",     label: "Good — Euro6 & Sprinter OK", detail: "Euro6 diesel is widely available in cities and along major highways. Mercedes-Benz has a domestic assembly plant and a solid dealer/service network; a Sprinter AWD can be serviced in most larger cities, though rural coverage is thinner." },
+    roadQuality: { level: "easy",     label: "Good, mixed terrain", detail: "Modern divided highways connect major cities; secondary/mountain roads in the east can be narrower and winding. Occasional flash flooding on the Black Sea coast; snow can close some interior/eastern mountain roads in winter." },
+  },
+  {
+    name: "Iraq",
+    visa:        { level: "moderate", label: "e-visa / on arrival (KRG)", detail: "The Kurdistan Region (Erbil, Sulaymaniyah) offers visa-on-arrival for many nationalities. Federal Iraq requires a separate e-visa and is subject to more scrutiny and changing rules." },
+    particular:  { level: "hard",     label: "Security-restricted", detail: "Independent travel outside the Kurdistan Region is constrained by the security situation; permits, checkpoints, and in some cases a local escort/guide are advisable or required." },
+    stayLength:  { level: "moderate", label: "~30 days (KRG)", detail: "Typical Kurdistan Region visa-on-arrival validity is around 30 days; federal Iraq e-visa terms vary." },
+    extendStay:  { level: "hard",     label: "Difficult", detail: "Extensions require visiting an immigration office in the Kurdistan Region and are not straightforward; most travelers plan to exit before expiry instead." },
+    carnet:      { level: "moderate", label: "Recommended", detail: "Not universally enforced but strongly recommended given inconsistent customs practices at different border crossings." },
+    vehicleStay: { level: "moderate", label: "~30 days", detail: "Generally tied to the visa duration." },
+    extendVeh:   { level: "hard",     label: "Difficult", detail: "Complicated by both bureaucracy and the security situation; extending is not reliable." },
+    modernVeh:   { level: "hard",     label: "Limited support", detail: "Euro6 diesel and fuel quality are inconsistent; no meaningful dealer network for a European van; a large, distinctive foreign vehicle also draws unwanted attention in some areas." },
+    roadQuality: { level: "moderate", label: "Variable, checkpoints", detail: "Highways in the Kurdistan Region are in decent condition; roads elsewhere vary and are subject to frequent security checkpoints. Flash floods can occur in desert wadis after rare heavy rain." },
+  },
+  {
+    name: "Jordan",
+    visa:        { level: "easy",     label: "Visa on arrival", detail: "Visa on arrival available for many nationalities at air and land borders (fee applies); the Jordan Pass bundles the visa fee with major site entries for eligible travelers." },
+    particular:  { level: "easy",     label: "None (guide only in Wadi Rum)", detail: "Self-driving is common and easy nationwide; only deep desert excursions in Wadi Rum require a local guide/4x4 driver." },
+    stayLength:  { level: "easy",     label: "30 days", detail: "Standard tourist visa validity is 30 days." },
+    extendStay:  { level: "moderate", label: "One extension, simple", detail: "A single extension is usually straightforward at a local police/immigration station; further extensions get more bureaucratic." },
+    carnet:      { level: "easy",     label: "Not required", detail: "A temporary import permit is issued at the border; a Carnet de Passage is not mandatory." },
+    vehicleStay: { level: "easy",     label: "Matches visa (30 days)", detail: "Tied to the visa duration, extendable similarly to the personal stay." },
+    extendVeh:   { level: "moderate", label: "Via customs, manageable", detail: "Possible through customs with some paperwork; generally manageable compared to neighboring countries." },
+    modernVeh:   { level: "easy",     label: "Good — Euro6 & Sprinter OK", detail: "Euro6 diesel available in Amman and along main routes; Mercedes has an established dealer presence in Amman capable of servicing a Sprinter." },
+    roadQuality: { level: "easy",     label: "Good, rare flash floods", detail: "Well-maintained paved highways (Desert Highway, King's Highway) connect major sites; occasional flash flooding around Wadi Rum/Petra after rare storms, but no recurring mountain-pass closures." },
+  },
+  {
+    name: "Saudi Arabia",
+    visa:        { level: "easy",     label: "e-visa online", detail: "Straightforward tourist e-visa introduced in 2019, available online for many nationalities within minutes to days." },
+    particular:  { level: "moderate", label: "Cultural/dress codes", detail: "Modest dress and behavior expectations apply; some military/border zones are restricted. Basic health/travel insurance is bundled automatically into the tourist e-visa fee." },
+    stayLength:  { level: "easy",     label: "90 days", detail: "Tourist e-visa typically allows stays up to 90 days, multiple entries within a year." },
+    extendStay:  { level: "moderate", label: "Possible, some hassle", detail: "Extensions can be arranged via the Absher platform/immigration but are not always simple for short-term tourists." },
+    carnet:      { level: "easy",     label: "Not typically required", detail: "A temporary import permit is issued for tourists driving on a valid e-visa; formal Carnet de Passage is not the norm for casual tourism." },
+    vehicleStay: { level: "easy",     label: "Matches visa (90 days)", detail: "Tied to the visa validity, with multiple entries possible within a year." },
+    extendVeh:   { level: "moderate", label: "Possible, some hassle", detail: "Similar process to personal stay extension." },
+    modernVeh:   { level: "easy",     label: "Excellent", detail: "Euro6 diesel widely available; one of the strongest Mercedes-Benz dealer networks in the region, fully capable of servicing a Sprinter AWD." },
+    roadQuality: { level: "easy",     label: "Excellent highways", detail: "Extensive modern, well-maintained highway network nationwide. Rare flash flooding in wadis near cities (e.g. Riyadh, Jeddah) after unusual storms; desert roads can have sand drifts." },
+  },
+  {
+    name: "UAE",
+    visa:        { level: "easy",     label: "Visa on arrival / free", detail: "Most nationalities receive visa-free entry or visa on arrival for 30-90 days." },
+    particular:  { level: "easy",     label: "Strict conduct laws", detail: "Strict laws around alcohol and public conduct apply but do not affect route planning." },
+    stayLength:  { level: "easy",     label: "30-90 days", detail: "Depends on nationality; commonly 30 or 90 days visa-free." },
+    extendStay:  { level: "easy",     label: "Simple online renewal", detail: "Extensions/renewals can be handled fairly easily online via GDRFA services." },
+    carnet:      { level: "easy",     label: "Not required", detail: "Temporary import permit issued at the border/customs for tourists; no carnet needed for typical visits." },
+    vehicleStay: { level: "easy",     label: "Matches visa", detail: "Tied to the visa duration, easily renewable." },
+    extendVeh:   { level: "easy",     label: "Simple", detail: "Extension process is straightforward through customs/GDRFA." },
+    modernVeh:   { level: "easy",     label: "Excellent", detail: "Euro6 diesel widely available; strong Mercedes-Benz dealer network; the Sprinter is a popular base for camper conversions in the UAE, so support is excellent." },
+    roadQuality: { level: "easy",     label: "Excellent, rare urban flooding", detail: "World-class highway network. Rare but occasionally severe urban flooding after unusual heavy rain events (e.g. Dubai 2024); Hajar mountain roads can close briefly after storms." },
+  },
+  {
+    name: "Oman",
+    visa:        { level: "easy",     label: "e-visa online", detail: "Straightforward e-visa process online for most nationalities." },
+    particular:  { level: "easy",     label: "None", detail: "Some off-road wadi routes warrant local advice/caution; otherwise no special legal restrictions." },
+    stayLength:  { level: "easy",     label: "30 days", detail: "Standard tourist e-visa validity, extendable." },
+    extendStay:  { level: "moderate", label: "Extension via ROP", detail: "Extensions available through Royal Oman Police, with some paperwork." },
+    carnet:      { level: "easy",     label: "Not required", detail: "Temporary import handled at the border without a formal carnet." },
+    vehicleStay: { level: "easy",     label: "Matches visa (30 days)", detail: "Tied to the visa, extendable similarly." },
+    extendVeh:   { level: "moderate", label: "Possible, some paperwork", detail: "Manageable but requires a visit to the relevant customs/police office." },
+    modernVeh:   { level: "moderate", label: "Good in cities", detail: "Euro6 diesel reliably available in Muscat and main towns, less certain in remote desert; Mercedes has a dealer presence in Muscat." },
+    roadQuality: { level: "moderate", label: "Good, flash-flood-prone wadis", detail: "Well-paved highways between main cities; mountain routes (Jebel Akhdar, Jebel Shams) are steep and can close after rare heavy rain — wadis flood quickly and dangerously ('wadi bashing' requires real caution)." },
+  },
+  {
+    name: "Georgia",
+    visa:        { level: "easy",     label: "Visa-free (up to 1 yr)", detail: "Citizens of the EU, US, UK, and many other countries can enter visa-free for up to 365 days — one of the most generous visa-free allowances in the world." },
+    particular:  { level: "easy",     label: "None", detail: "Self-driving is fully allowed and common; Georgia is a well-established overlanding hub. Some breakaway regions (Abkhazia, South Ossetia) are off-limits without special permission." },
+    stayLength:  { level: "easy",     label: "365 days", detail: "Up to 365 days visa-free for most Western nationalities; some nationalities have shorter allowances (90 days) — check per passport." },
+    extendStay:  { level: "easy",     label: "Rarely needed", detail: "Given the long visa-free period, extension is rarely necessary. If needed, a simple border run to Armenia or Azerbaijan and back resets the counter for many nationalities." },
+    carnet:      { level: "easy",     label: "Not required", detail: "No Carnet de Passage required. A temporary import permit is issued at the border free of charge, matching the visa-free period." },
+    vehicleStay: { level: "easy",     label: "Matches visa (up to 1 yr)", detail: "Vehicle import is tied to the same visa-free duration as the driver, typically up to 365 days." },
+    extendVeh:   { level: "easy",     label: "Border run resets it", detail: "A short exit/re-entry (e.g. to Armenia or Azerbaijan) is a simple and commonly used way to reset both the personal and vehicle stay allowance." },
+    modernVeh:   { level: "moderate", label: "OK in cities, thin elsewhere", detail: "Euro6 diesel is available in Tbilisi and other larger cities but less consistent in rural/mountain areas. There is no official Mercedes Sprinter dealer network; independent workshops can generally handle common repairs, but specialized parts may need to be shipped in." },
+    roadQuality: { level: "moderate", label: "Good, mountain passes close in winter", detail: "Main highways are solid; mountain passes (e.g. the Georgian Military Highway/Jvari Pass) close in winter due to snow and can also close temporarily after rockslides. Some rural roads are rough gravel." },
+  },
+  {
+    name: "Azerbaijan",
+    visa:        { level: "easy",     label: "e-visa (ASAN Visa)", detail: "Quick and easy online e-visa (ASAN Visa) for most nationalities, usually issued within days." },
+    particular:  { level: "moderate", label: "Restricted border areas", detail: "Some areas near the Armenian border/former conflict zones require permits or are off-limits." },
+    stayLength:  { level: "moderate", label: "30 days", detail: "Standard e-visa validity is 30 days." },
+    extendStay:  { level: "moderate", label: "Possible, some paperwork", detail: "Extensions available via the State Migration Service, involving some bureaucracy." },
+    carnet:      { level: "easy",     label: "Not required", detail: "Temporary import permit issued at the border, no formal carnet needed." },
+    vehicleStay: { level: "moderate", label: "~30 days", detail: "Tied to the visa duration." },
+    extendVeh:   { level: "moderate", label: "Possible, some paperwork", detail: "Similar process to extending personal stay." },
+    modernVeh:   { level: "moderate", label: "Baku only", detail: "Euro6 diesel available in Baku, less so in rural areas; no significant official Mercedes van dealer network outside the capital." },
+    roadQuality: { level: "moderate", label: "Good main roads, rough mountains", detail: "Good highways centered on Baku; mountainous regions toward the Georgian border and Greater Caucasus can have poor or unpaved sections and occasional seasonal closures/landslides." },
+  },
+  {
+    name: "Russia – Caucasus",
+    visa:        { level: "moderate", label: "Visa required", detail: "Most Western nationalities need a visa; Russia's unified e-visa system (available to many nationalities since 2023) has simplified the process considerably, though it is short-validity and single-entry. Traditional visas via invitation letter remain an option for longer stays. Flight connectivity and card payments are limited for some nationalities, but overlanders continue to transit and travel through Russia in practice — reports suggest the process, while bureaucratic, is manageable with preparation." },
+    particular:  { level: "moderate", label: "Registration & restricted zones", detail: "Some republics (e.g. Chechnya, Dagestan) require local registration and have specific travel advisories; some border zones need permits. Proof of travel/medical insurance is typically required as part of the visa application." },
+    stayLength:  { level: "moderate", label: "~30 days", detail: "Typical tourist visa validity." },
+    extendStay:  { level: "hard",     label: "Not realistic", detail: "Extension on a tourist visa is essentially not available; plan to exit before expiry." },
+    carnet:      { level: "moderate", label: "Not required, local insurance needed", detail: "A Carnet de Passage is not required; a temporary import declaration is made at the border as usual. International Green Card insurance is no longer accepted, so mandatory local OSAGO liability insurance must be purchased at the border instead — a known, solvable extra step rather than a fundamental blocker, according to several overlanders who have done it recently." },
+    vehicleStay: { level: "hard",     label: "Complex", detail: "Tied to visa duration but complicated in practice by the current situation." },
+    extendVeh:   { level: "hard",     label: "Not realistic", detail: "Not a reliable option currently." },
+    modernVeh:   { level: "moderate", label: "Parallel-import parts only", detail: "Official Mercedes-Benz dealer support has withdrawn due to sanctions, but a well-established parallel-import parts and service market has grown to fill the gap in major cities; slower and costlier than before, but not a dead end." },
+    roadQuality: { level: "moderate", label: "Variable, winter closures", detail: "Roads around Caucasus resort areas (Sochi, Elbrus) are decent; more remote mountain roads/passes are rougher, and heavy snow closes many routes in winter." },
+  },
+  {
+    name: "Kazakhstan",
+    visa:        { level: "easy",     label: "Visa-free / e-visa", detail: "Visa-free for many Western nationalities up to 30 days; otherwise a straightforward e-visa process." },
+    particular:  { level: "moderate", label: "Vast distances", detail: "The main challenge is the huge distances and sparse fuel/services in remote steppe areas rather than any legal restriction." },
+    stayLength:  { level: "easy",     label: "30 days", detail: "Standard visa-free/e-visa allowance." },
+    extendStay:  { level: "moderate", label: "Possible, some bureaucracy", detail: "Extensions available via migration police, involving some paperwork." },
+    carnet:      { level: "moderate", label: "Recommended", detail: "Not strictly mandatory but carrying one is recommended for a smoother border crossing." },
+    vehicleStay: { level: "moderate", label: "~30 days, extendable", detail: "Tied to the visa duration." },
+    extendVeh:   { level: "moderate", label: "Possible, some bureaucracy", detail: "Similar process to personal stay extension." },
+    modernVeh:   { level: "moderate", label: "OK in cities", detail: "Euro6 diesel available in Almaty/Astana, scarce in remote steppe regions; Mercedes dealer presence exists in major cities only." },
+    roadQuality: { level: "moderate", label: "Improving, poor in remote areas", detail: "Highways connecting major cities are improving but can be poor/potholed, especially in the remote west; extreme winter conditions can close some roads. Flooding is not a major concern given the arid climate." },
+  },
+  {
+    name: "Kyrgyzstan",
+    visa:        { level: "easy",     label: "Visa-free (up to 60 days)", detail: "Visa-free access for many nationalities, among the more relaxed regimes in Central Asia." },
+    particular:  { level: "moderate", label: "Some border permits", detail: "Some areas near the Tajik/Chinese borders may require permits." },
+    stayLength:  { level: "easy",     label: "60 days", detail: "Standard visa-free allowance for many nationalities." },
+    extendStay:  { level: "moderate", label: "Possible via migration service", detail: "Extensions available but involve some bureaucracy." },
+    carnet:      { level: "easy",     label: "Not required", detail: "Informal temporary import process at the border; no formal carnet needed." },
+    vehicleStay: { level: "moderate", label: "Tied to visa (60 days)", detail: "Extension possible with some effort." },
+    extendVeh:   { level: "moderate", label: "Possible, some effort", detail: "Similar process to personal stay extension." },
+    modernVeh:   { level: "hard",     label: "Limited outside Bishkek", detail: "Euro6 diesel scarce outside the capital; no Mercedes dealer network — independent mechanics only, and mountain routes are demanding on a large vehicle." },
+    roadQuality: { level: "hard",     label: "Scenic but rough, passes close in winter", detail: "Spectacular mountain roads, but many high passes (over 3000m) close with snow roughly October to May; landslides and spring-thaw damage can close roads temporarily." },
+  },
+  {
+    name: "Uzbekistan",
+    visa:        { level: "moderate", label: "e-visa required (online)", detail: "Most nationalities need an e-visa applied for in advance online (a handful of countries have short visa-free access). Processing usually takes a few business days; not something you can arrange on arrival." },
+    particular:  { level: "moderate", label: "Registration rules", detail: "Travelers are formally required to register their whereabouts (usually handled automatically by hotels); staying in unregistered accommodation for multiple nights can create issues on exit. Some border-adjacent zones are restricted." },
+    stayLength:  { level: "moderate", label: "30 days (e-visa)", detail: "Standard e-visa validity is 30 days for most nationalities." },
+    extendStay:  { level: "hard",     label: "Bureaucratic", detail: "Extending a tourist visa from inside the country is possible in theory but bureaucratic and not reliably guaranteed; most travelers plan their itinerary to fit within the 30-day window or exit/re-enter instead." },
+    carnet:      { level: "hard",     label: "Recommended/required", detail: "A Carnet de Passage is officially expected for temporary vehicle import, though enforcement varies by border crossing. Carrying one is strongly recommended to avoid delays or additional deposits at the border." },
+    vehicleStay: { level: "moderate", label: "Tied to visa (30 days)", detail: "Vehicle import permit duration is generally tied to the visa validity, i.e. around 30 days." },
+    extendVeh:   { level: "hard",     label: "Bureaucratic", detail: "Extending the vehicle's temporary import permit involves customs paperwork and is not straightforward; exiting and re-entering is often more practical than trying to extend in-country." },
+    modernVeh:   { level: "hard",     label: "Limited — plan spares", detail: "Euro6 diesel is scarce outside Tashkent and a few larger cities, and fuel quality can be inconsistent in remote areas. There is no meaningful Mercedes Sprinter dealer/service presence — carry spare parts and expect to rely on generalist mechanics for anything beyond basic repairs." },
+    roadQuality: { level: "moderate", label: "Good main routes, poor rural roads", detail: "Main highways between Tashkent-Samarkand-Bukhara are good and improving; rural/desert roads can be poor. No major flooding or pass-closure issues except in the Fann Mountains area." },
+  },
+  {
+    name: "Turkmenistan",
+    visa:        { level: "hard",     label: "Invitation letter needed", detail: "Notoriously difficult: requires an official letter of invitation, and tourist visas are usually tied to a mandatory guided tour with a fixed itinerary." },
+    particular:  { level: "hard",     label: "Mandatory guide/itinerary", detail: "Independent travel is essentially not possible for tourists; a licensed guide and pre-approved route are required, with restrictions on photography in places. Mandatory travel insurance is also typically required as part of the visa process." },
+    stayLength:  { level: "hard",     label: "Short, fixed (5-10 days typical)", detail: "Tourist and transit visas are usually short and tied to the pre-approved itinerary." },
+    extendStay:  { level: "hard",     label: "Not realistic", detail: "The fixed-itinerary system leaves essentially no room for extension." },
+    carnet:      { level: "hard",     label: "Required, strictly enforced", detail: "A Carnet de Passage is required and enforced at the notoriously slow, strict border crossings." },
+    vehicleStay: { level: "hard",     label: "Short, fixed", detail: "Tied to the same short, inflexible visa itinerary." },
+    extendVeh:   { level: "hard",     label: "Not realistic", detail: "No practical mechanism to extend." },
+    modernVeh:   { level: "hard",     label: "Not supported", detail: "Euro6 diesel and consistent fuel quality are unavailable; no dealer network; extreme heat and remote desert distances are demanding on any vehicle." },
+    roadQuality: { level: "hard",     label: "Poor outside showcase routes", detail: "Some good showcase highways around Ashgabat, but many roads elsewhere are poor and potholed; Karakum desert crossings are rough tracks. Extreme heat and sandstorms are a bigger risk than flooding." },
+  },
+  {
+    name: "Tajikistan",
+    visa:        { level: "moderate", label: "e-visa + GBAO permit", detail: "e-visa available for many nationalities; a separate GBAO permit is required as an add-on for the Pamir Highway/Gorno-Badakhshan region." },
+    particular:  { level: "moderate", label: "GBAO permit for Pamirs", detail: "The Pamir Highway region requires the additional GBAO permit; otherwise the rest of the country is generally open to independent travel." },
+    stayLength:  { level: "easy",     label: "45 days (e-visa)", detail: "Typical e-visa validity." },
+    extendStay:  { level: "moderate", label: "Possible via OVIR", detail: "Extensions require a visit to the local OVIR (registration) office; manageable but takes time." },
+    carnet:      { level: "moderate", label: "Not formally required", detail: "Informal temporary import process at the border in most cases." },
+    vehicleStay: { level: "moderate", label: "Tied to visa", detail: "Generally matches the personal visa duration." },
+    extendVeh:   { level: "moderate", label: "Possible via OVIR", detail: "Similar process to personal stay extension." },
+    modernVeh:   { level: "hard",     label: "Very limited outside Dushanbe", detail: "Euro6 diesel virtually unavailable outside the capital; the Pamir Highway is extremely tough on any vehicle due to altitude, fuel quality and total lack of dealer support." },
+    roadQuality: { level: "hard",     label: "Pamir Highway rough, passes close", detail: "The iconic Pamir Highway is a rough mix of gravel and cracked asphalt, prone to landslides and washouts; high passes (over 4000m) can close with snow even in shoulder seasons. Other main roads are reasonable." },
+  },
+  {
+    name: "Afghanistan",
+    visa:        { level: "hard",     label: "Very difficult / limited", detail: "Tourist visa issuance is extremely limited under the current government; most governments advise against all travel due to the security situation." },
+    particular:  { level: "hard",     label: "Security dominant factor", detail: "The security situation overrides all other planning; a local guide/fixer is effectively mandatory, women's travel is heavily restricted, and large areas are inaccessible." },
+    stayLength:  { level: "hard",     label: "Variable/short", detail: "Difficult to assess formally given the current situation." },
+    extendStay:  { level: "hard",     label: "Not realistic", detail: "Not a meaningful consideration given current circumstances." },
+    carnet:      { level: "hard",     label: "Not practically relevant", detail: "Self-driving into Afghanistan is not realistically advisable regardless of paperwork in place." },
+    vehicleStay: { level: "hard",     label: "Not practically relevant", detail: "Same reasoning as above." },
+    extendVeh:   { level: "hard",     label: "Not practically relevant", detail: "N/A under current conditions." },
+    modernVeh:   { level: "hard",     label: "Not a realistic destination", detail: "Fuel quality and infrastructure are very unpredictable; this is not currently a realistic overlanding destination." },
+    roadQuality: { level: "hard",     label: "Poor, conflict-affected, passes close", detail: "Roads are poor and deteriorating after decades of conflict and underinvestment. Mountain passes (e.g. Salang Pass) are prone to closure from snow/avalanches, and security checkpoints are frequent." },
+  },
+  {
+    name: "Pakistan",
+    visa:        { level: "moderate", label: "e-visa online", detail: "Generally straightforward e-visa process online for most nationalities in recent years." },
+    particular:  { level: "moderate", label: "NOC for some northern areas", detail: "A No Objection Certificate (NOC) is required for parts of Gilgit-Baltistan near sensitive borders; self-driving on the Karakoram Highway is otherwise increasingly common." },
+    stayLength:  { level: "moderate", label: "30-90 days", detail: "Depends on the visa category obtained." },
+    extendStay:  { level: "moderate", label: "Possible via immigration offices", detail: "Extensions available through NADRA/immigration offices in major cities." },
+    carnet:      { level: "moderate", label: "Recommended", detail: "Not always strictly enforced, but carrying one smooths customs procedures." },
+    vehicleStay: { level: "moderate", label: "Tied to visa", detail: "Generally matches the personal visa duration." },
+    extendVeh:   { level: "moderate", label: "Possible, some bureaucracy", detail: "Similar process to personal stay extension." },
+    modernVeh:   { level: "hard",     label: "Limited outside major cities", detail: "Euro6 diesel scarce outside Karachi/Lahore; Mercedes dealer presence limited to a few major cities, and servicing a Sprinter in the north is difficult." },
+    roadQuality: { level: "hard",     label: "KKH landslide-prone, monsoon flooding", detail: "The Karakoram Highway is iconic but subject to landslides, flash floods and monsoon damage with occasional multi-day closures. Southern highways are better maintained. Monsoon flooding is a recurring major risk (e.g. 2022 floods)." },
+  },
+  {
+    name: "India – Himalaya (Ladakh/Kashmir)",
+    visa:        { level: "moderate", label: "e-visa + Inner Line Permit", detail: "India's e-visa is generally straightforward, but Inner Line Permits/Protected Area Permits are required for parts of Ladakh near the China border and similar sensitive zones." },
+    particular:  { level: "hard",     label: "Permits, often via registered agent", detail: "ILP/PAP applications sometimes require a registered local agent; adds planning complexity for border-adjacent areas." },
+    stayLength:  { level: "easy",     label: "90/180 days (e-visa)", detail: "Typical e-visa validity for tourism." },
+    extendStay:  { level: "moderate", label: "Possible via FRRO", detail: "Extensions possible through the Foreigners Regional Registration Office but can be bureaucratic." },
+    carnet:      { level: "hard",     label: "Very restrictive in practice", detail: "Formal carnet requirements exist on paper, but temporary import of foreign-registered private vehicles into India is heavily restricted and rarely permitted in practice, regardless of paperwork." },
+    vehicleStay: { level: "hard",     label: "Very restrictive", detail: "Most foreign private vehicles are effectively not allowed extended stay without special, hard-to-obtain permission." },
+    extendVeh:   { level: "hard",     label: "Very restrictive", detail: "Not a realistic option for most travelers." },
+    modernVeh:   { level: "hard",     label: "Difficult at altitude", detail: "Euro6 diesel available in cities but unreliable in the high Himalaya; high-altitude passes are tough on any vehicle, and dealer support in remote Ladakh is essentially absent." },
+    roadQuality: { level: "hard",     label: "High passes, seasonal closures", detail: "Home to some of the highest motorable passes in the world (e.g. Khardung La); spectacular but prone to landslides, snow closures (many passes shut roughly October to May), and monsoon washouts on approach roads." },
+  },
+  {
+    name: "Nepal",
+    visa:        { level: "easy",     label: "Visa on arrival", detail: "Visa on arrival for most nationalities, straightforward at the airport or main land borders." },
+    particular:  { level: "moderate", label: "Trekking permits; self-drive restricted", detail: "TIMS card/permits are required for trekking regions. Bringing a private foreign vehicle into Nepal is uncommon and heavily restricted in practice." },
+    stayLength:  { level: "easy",     label: "30/90 days", detail: "Depends on the visa option chosen on arrival." },
+    extendStay:  { level: "moderate", label: "Extensions at Immigration, Kathmandu", detail: "Extensions are available at the Department of Immigration in Kathmandu, with moderate paperwork." },
+    carnet:      { level: "hard",     label: "Rarely feasible", detail: "A carnet is technically the mechanism, but private foreign vehicle import into Nepal is rare and heavily restricted in practice." },
+    vehicleStay: { level: "hard",     label: "Rarely feasible", detail: "Same restriction as above." },
+    extendVeh:   { level: "hard",     label: "Rarely feasible", detail: "Not a realistic planning option for most private vehicles." },
+    modernVeh:   { level: "hard",     label: "Very limited support", detail: "Euro6 diesel available in Kathmandu only; mountain roads are very tough on vehicles; no Mercedes van dealer/service presence." },
+    roadQuality: { level: "hard",     label: "Landslide-prone, monsoon blockages", detail: "Kathmandu valley roads are decent, but most highways and mountain roads are narrow and landslide-prone; the monsoon (roughly June-September) frequently causes road blockages and washouts." },
+  },
+  {
+    name: "Bhutan",
+    visa:        { level: "hard",     label: "Pre-arranged via licensed operator", detail: "Visa must be arranged in advance through a licensed Bhutanese tour operator, alongside the mandatory Sustainable Development Fee; independent/self-guided travel is not permitted." },
+    particular:  { level: "hard",     label: "Mandatory licensed guide", detail: "Among the most restrictive regimes anywhere: a licensed guide and pre-arranged itinerary are mandatory for the entire visit; independent self-drive tourism is essentially disallowed." },
+    stayLength:  { level: "moderate", label: "Matches booked itinerary", detail: "Stay length is whatever is booked with the operator — flexible in principle but requires operator involvement to change." },
+    extendStay:  { level: "hard",     label: "Requires operator involvement", detail: "Extending is tied to the registered tour and requires coordination with the licensed operator." },
+    carnet:      { level: "hard",     label: "Not applicable for tourists", detail: "Private foreign vehicle self-drive is not offered to tourists; transport is arranged locally as part of the tour." },
+    vehicleStay: { level: "hard",     label: "Not applicable", detail: "Not a relevant category for typical visitors." },
+    extendVeh:   { level: "hard",     label: "Not applicable", detail: "N/A." },
+    modernVeh:   { level: "hard",     label: "Not applicable", detail: "Since self-drive with a private vehicle isn't offered, the question of Euro6/Sprinter support doesn't really apply — local operator vehicles are used instead." },
+    roadQuality: { level: "moderate", label: "Winding, monsoon landslides", detail: "Narrow, winding mountain roads, well engineered around Thimphu/Paro but landslide-prone elsewhere, with occasional closures during the monsoon (roughly June-September)." },
+  },
+  {
+    name: "India – North",
+    visa:        { level: "easy",     label: "e-visa online", detail: "Straightforward e-visa process for most nationalities." },
+    particular:  { level: "moderate", label: "Some border-area permits", detail: "Parts of border states may require additional permits." },
+    stayLength:  { level: "easy",     label: "90/180 days (e-visa)", detail: "Typical e-visa validity for tourism." },
+    extendStay:  { level: "moderate", label: "Possible via FRRO", detail: "Extensions possible but bureaucratic." },
+    carnet:      { level: "hard",     label: "Very restrictive in practice", detail: "As with the rest of India, private foreign-registered vehicle import is heavily restricted regardless of carnet paperwork." },
+    vehicleStay: { level: "hard",     label: "Very restrictive", detail: "Same country-wide restriction." },
+    extendVeh:   { level: "hard",     label: "Very restrictive", detail: "Not realistic for most travelers." },
+    modernVeh:   { level: "moderate", label: "Available but congested", detail: "Euro6 diesel widely available in northern cities; heavy traffic/congestion is the main challenge for a large vehicle like a Sprinter. Dealer network exists in major cities." },
+    roadQuality: { level: "moderate", label: "Good highways, monsoon disruption", detail: "The Golden Quadrilateral and other major highways are generally good and improving; monsoon (roughly June-September) can disrupt rural roads; heavy traffic congestion is nationwide." },
+  },
+  {
+    name: "India – South",
+    visa:        { level: "easy",     label: "e-visa online", detail: "Same nationwide e-visa system as the rest of India." },
+    particular:  { level: "moderate", label: "None major", detail: "Generally open for independent travel; same country-wide vehicle-import restrictions apply." },
+    stayLength:  { level: "easy",     label: "90/180 days (e-visa)", detail: "Typical e-visa validity." },
+    extendStay:  { level: "moderate", label: "Possible via FRRO", detail: "Same process as elsewhere in India." },
+    carnet:      { level: "hard",     label: "Very restrictive in practice", detail: "Same country-wide restriction on private foreign vehicle import." },
+    vehicleStay: { level: "hard",     label: "Very restrictive", detail: "Same as North India." },
+    extendVeh:   { level: "hard",     label: "Very restrictive", detail: "Not realistic for most travelers." },
+    modernVeh:   { level: "moderate", label: "Available in major cities", detail: "Euro6 diesel available in Bangalore/Chennai and other major cities; traffic is heavy but road quality is generally good." },
+    roadQuality: { level: "moderate", label: "Good, monsoon flooding in places", detail: "Generally good highway network, well maintained in Karnataka/Tamil Nadu/Kerala. Monsoon (both southwest and northeast) can cause localized flooding, especially in Kerala; Western Ghats roads are narrow and winding." },
+  },
+  {
+    name: "Bangladesh",
+    visa:        { level: "moderate", label: "e-visa / visa on arrival", detail: "Available for many nationalities but process can be bureaucratic and inconsistent." },
+    particular:  { level: "moderate", label: "Dense traffic", detail: "Extreme traffic density is the main practical challenge rather than any formal restriction." },
+    stayLength:  { level: "easy",     label: "30 days", detail: "Typical tourist visa validity." },
+    extendStay:  { level: "moderate", label: "Via Immigration, Dhaka", detail: "Extensions possible but bureaucratic, handled through Immigration in Dhaka." },
+    carnet:      { level: "hard",     label: "Rarely feasible", detail: "Private overlanding through Bangladesh with a foreign vehicle is uncommon and complex due to border and infrastructure constraints." },
+    vehicleStay: { level: "hard",     label: "Rarely feasible", detail: "Land border crossing with a private foreign vehicle is uncommon and bureaucratically difficult." },
+    extendVeh:   { level: "hard",     label: "Rarely feasible", detail: "Not a realistic planning option for most travelers." },
+    modernVeh:   { level: "hard",     label: "Limited support", detail: "Euro6 diesel limited; extremely congested roads and monsoon flooding are tough on any vehicle logistics." },
+    roadQuality: { level: "hard",     label: "Flood-prone, congested", detail: "Large parts of the country are flood-prone during the monsoon (roughly June-September); roads are often congested and poorly maintained, with ferry crossings needed for many river routes." },
+  },
+  {
+    name: "Sri Lanka",
+    visa:        { level: "moderate", label: "ETA required in advance", detail: "An Electronic Travel Authorization must be obtained online before arrival; the process itself is straightforward." },
+    particular:  { level: "easy",     label: "None", detail: "Self-driving is possible though many tourists opt for a hired driver given local road conditions/customs." },
+    stayLength:  { level: "easy",     label: "30 days", detail: "Standard ETA validity, extendable." },
+    extendStay:  { level: "moderate", label: "Via Immigration, Colombo", detail: "Extensions available at the Department of Immigration in Colombo, with some bureaucracy." },
+    carnet:      { level: "hard",     label: "No land border — sea freight only", detail: "As an island there is no vehicle ferry service to Sri Lanka; the only land border option doesn't exist, so a private vehicle would need to go by cargo sea freight (not a roll-on/roll-off passenger car ferry). This is slow, costly and requires a temporary import bond, making it impractical for casual overlanding." },
+    vehicleStay: { level: "hard",     label: "Not practically applicable", detail: "Same reasoning — temporary import bonds and shipping costs make this impractical for casual travel." },
+    extendVeh:   { level: "hard",     label: "Not practically applicable", detail: "N/A given the above." },
+    modernVeh:   { level: "moderate", label: "Available in Colombo", detail: "Euro6 diesel available in Colombo, less so elsewhere; roads are narrow and congested, which is tough for a large van regardless of mechanical support." },
+    roadQuality: { level: "moderate", label: "Good main roads, monsoon landslides in hills", detail: "Coastal roads and modern expressways near Colombo are good; rural/hill roads are narrow and winding. Two monsoon seasons cause periodic flooding and landslides in the central highlands." },
+  },
+  {
+    name: "Mongolia",
+    visa:        { level: "easy",     label: "Visa-free / simple visa", detail: "Visa-free for many nationalities (commonly 30-90 days depending on passport) or a straightforward visa process otherwise." },
+    particular:  { level: "moderate", label: "Guide strongly advised", detail: "A guide is strongly recommended (though not legally mandatory) for remote steppe/desert self-drive, given the lack of signage, fuel stops and mobile coverage." },
+    stayLength:  { level: "easy",     label: "30-90 days", detail: "Depends on nationality." },
+    extendStay:  { level: "moderate", label: "Via Immigration Agency, Ulaanbaatar", detail: "Extensions possible through the Immigration Agency in the capital." },
+    carnet:      { level: "moderate", label: "Not formally required", detail: "Informal temporary import at land borders (mainly from Russia or China), though the crossings themselves can be slow and bureaucratic." },
+    vehicleStay: { level: "moderate", label: "Tied to visa, extendable", detail: "Generally matches the personal visa duration." },
+    extendVeh:   { level: "moderate", label: "Possible, some bureaucracy", detail: "Similar process to personal stay extension." },
+    modernVeh:   { level: "hard",     label: "Ulaanbaatar only", detail: "Euro6 diesel reliably available only in Ulaanbaatar; essentially no infrastructure or dealer support in the vast countryside — a high-clearance, mechanically simple vehicle is generally preferred over a large European van." },
+    roadQuality: { level: "hard",     label: "Mostly unpaved, mud/river crossings", detail: "Very few paved roads outside Ulaanbaatar and a handful of main highways; most travel is on unmarked steppe tracks, which become impassable mud after rain, and rivers can be un-fordable after snowmelt. No alpine-style pass closures, but weather can strand vehicles for days." },
+  },
+  {
+    name: "Russia – Baikal–Vladivostok",
+    visa:        { level: "moderate", label: "Visa required", detail: "Same country-wide visa system as the Caucasus entry — the unified e-visa has simplified things for many nationalities, though it is short and single-entry; longer stays still use an invitation-letter visa." },
+    particular:  { level: "moderate", label: "Vast distances, remote border zones", detail: "Some far-eastern border areas may have local restrictions; the sheer scale of the Trans-Siberian route is itself the main challenge." },
+    stayLength:  { level: "moderate", label: "~30 days", detail: "Typical tourist visa validity." },
+    extendStay:  { level: "hard",     label: "Not realistic", detail: "Same as elsewhere in Russia — plan to exit before visa expiry." },
+    carnet:      { level: "moderate", label: "Not required, local insurance needed", detail: "Same as the Caucasus entry — no carnet required, but mandatory local OSAGO liability insurance must be bought at the border since foreign Green Card insurance is no longer accepted." },
+    vehicleStay: { level: "moderate", label: "Tied to visa duration", detail: "Vehicle stay generally matches the visa duration, similar to the Caucasus entry." },
+    extendVeh:   { level: "moderate", label: "Possible, some bureaucracy", detail: "Similar process to extending the personal visa/stay." },
+    modernVeh:   { level: "moderate", label: "Parallel-import parts only, thinner in the far east", detail: "Same as the Caucasus entry — official Mercedes-Benz support has withdrawn, replaced by a parallel-import parts/service market; this thins out considerably the farther east you travel, so carrying spares is wise." },
+    roadQuality: { level: "moderate", label: "Good main route, extreme winters", detail: "The main Trans-Siberian highway (M55/M58/M60) is mostly paved and in reasonable condition, though quality drops in remote stretches. Extreme cold and ice make winter travel hazardous; some secondary roads near Baikal are unpaved." },
+  },
+  {
+    name: "China – North (Beijing)",
+    visa:        { level: "moderate", label: "Visa required (or limited visa-free)", detail: "A Chinese visa is traditionally required in advance and the process is paperwork-heavy, though some nationalities now have limited visa-free short-stay access under recent policy changes." },
+    particular:  { level: "hard",     label: "Self-drive requires licensed guide/escort", detail: "Foreign self-drive into China is essentially not permitted independently; it requires a Chinese guide/escort vehicle and special temporary permits arranged well in advance through a specialized agency — among the most restrictive systems in the world for this." },
+    stayLength:  { level: "moderate", label: "30-90 days (visa dependent)", detail: "Depends on visa type obtained." },
+    extendStay:  { level: "moderate", label: "Possible via local PSB", detail: "Extensions possible through the local Public Security Bureau but bureaucratic." },
+    carnet:      { level: "hard",     label: "Special permit system, not standard carnet", detail: "China does not operate on the usual Carnet de Passage system; foreign vehicle entry requires a bespoke temporary permit process together with a licensed guide, arranged via a specialized agency well in advance." },
+    vehicleStay: { level: "hard",     label: "Tightly controlled, time-limited", detail: "Vehicle stay is tightly controlled per the special permit and generally short." },
+    extendVeh:   { level: "hard",     label: "Difficult", detail: "Not straightforward given the bespoke permit system." },
+    modernVeh:   { level: "moderate", label: "Mechanically fine, bureaucracy is the obstacle", detail: "Euro6-equivalent diesel is available in major cities and there is a large official Mercedes-Benz dealer network in Beijing — the entry regulations, not the vehicle's mechanical suitability, are the real obstacle here." },
+    roadQuality: { level: "easy",     label: "Excellent, occasional winter ice", detail: "Excellent modern highway network around Beijing and northern China, well maintained and rarely affected by flooding; winter can bring icy conditions requiring caution." },
+  },
+  {
+    name: "China – Central/Yangtze (Shanghai)",
+    visa:        { level: "moderate", label: "Visa required (or limited visa-free)", detail: "Same nationwide visa system as the rest of China." },
+    particular:  { level: "hard",     label: "Self-drive requires licensed guide/escort", detail: "Same nationwide restriction on independent foreign self-drive." },
+    stayLength:  { level: "moderate", label: "30-90 days (visa dependent)", detail: "Depends on visa type." },
+    extendStay:  { level: "moderate", label: "Possible via local PSB", detail: "Same process as elsewhere in China." },
+    carnet:      { level: "hard",     label: "Special permit system", detail: "Same bespoke permit and guide requirement as the rest of China." },
+    vehicleStay: { level: "hard",     label: "Tightly controlled, time-limited", detail: "Same nationwide restriction." },
+    extendVeh:   { level: "hard",     label: "Difficult", detail: "Same as elsewhere in China." },
+    modernVeh:   { level: "moderate", label: "Mechanically fine, bureaucracy is the obstacle", detail: "Shanghai has excellent infrastructure and a strong Mercedes-Benz presence; the entry permit system remains the main obstacle rather than mechanical support." },
+    roadQuality: { level: "moderate", label: "Excellent, occasional monsoon flooding", detail: "Excellent expressway network; some flooding risk in the low-lying Yangtze delta during heavy monsoon rains or typhoon season." },
+  },
+  {
+    name: "China – South/Tibet",
+    visa:        { level: "hard",     label: "Visa + Tibet Travel Permit", detail: "Same nationwide visa requirement, plus a mandatory additional Tibet Travel Permit for the Tibetan region — an extra layer not needed elsewhere in China." },
+    particular:  { level: "hard",     label: "Mandatory guide + fixed itinerary in Tibet", detail: "Tibet requires a licensed guide and a pre-arranged fixed itinerary for the entire visit, on top of the nationwide self-drive restrictions — the most restrictive part of China for independent travel." },
+    stayLength:  { level: "moderate", label: "30-90 days (visa dependent)", detail: "Depends on visa type; Tibet Travel Permit validity is typically tied to the booked itinerary." },
+    extendStay:  { level: "moderate", label: "Possible via local PSB (mainland)", detail: "Standard mainland process; Tibet itinerary changes require the booking agency." },
+    carnet:      { level: "hard",     label: "Special permit system, extra layer for Tibet", detail: "Same bespoke national permit/guide system, with the added Tibet Travel Permit requirement for that region." },
+    vehicleStay: { level: "hard",     label: "Tightly controlled, time-limited", detail: "Same nationwide restriction, more rigid in Tibet given the fixed-itinerary requirement." },
+    extendVeh:   { level: "hard",     label: "Difficult", detail: "Same as elsewhere in China, harder still in Tibet." },
+    modernVeh:   { level: "moderate", label: "Good in south, harder at altitude in Tibet", detail: "Southern Chinese cities have excellent infrastructure and Mercedes-Benz support; the Tibetan plateau's altitude and remoteness make vehicle support much thinner." },
+    roadQuality: { level: "moderate", label: "Good in south, high-altitude/Tibet harder", detail: "Southern China's expressways are generally good. Tibetan plateau roads have improved (many now paved), but high-altitude passes can close with snow, and landslides affect some routes in the rainy season; remote areas still have poor road conditions." },
+  },
+  {
+    name: "Japan",
+    visa:        { level: "easy",     label: "Visa-free (90 days)", detail: "Visa-free entry for most Western nationalities for up to 90 days." },
+    particular:  { level: "moderate", label: "International Driving Permit needed", detail: "Driving requires an International Driving Permit (1949 Geneva Convention type) or, for a few nationalities with bilateral agreements, a certified Japanese translation of the home license. Left-hand traffic. Infrastructure is otherwise excellent, with no special legal restrictions on independent travel." },
+    stayLength:  { level: "easy",     label: "90 days", detail: "Standard visa-free tourist allowance." },
+    extendStay:  { level: "hard",     label: "Not really extendable", detail: "The system isn't designed for tourist extensions — travelers are generally expected to leave at the end of the stay." },
+    carnet:      { level: "hard",     label: "Ferries exist, but import rules block it", detail: "International car ferries do connect Japan to South Korea (Busan–Shimonoseki/Fukuoka) and Russia (Vladivostok), so physically shipping a vehicle in is possible. The real obstacle is on the other side: Japan's strict, costly vehicle regulation and inspection ('shaken') system makes registering and legally using a foreign van impractical for most travelers, regardless of how it arrives." },
+    vehicleStay: { level: "hard",     label: "Impractical", detail: "Same reasoning as above." },
+    extendVeh:   { level: "hard",     label: "Impractical", detail: "N/A for most travelers." },
+    modernVeh:   { level: "moderate", label: "Good support, complex import rules", detail: "Official Mercedes-Benz dealers are present and could service a Sprinter, but importing and registering a foreign van requires meeting Japanese type-approval and the shaken inspection regime — complex and costly rather than mechanically difficult." },
+    roadQuality: { level: "easy",     label: "Excellent, seasonal snow/typhoon closures", detail: "Extremely well maintained nationwide, including mountainous regions. Some mountain passes close seasonally due to heavy snow (especially the Sea of Japan side and Hokkaido); typhoon season (roughly August-October) can cause temporary road closures/landslides." },
+  },
+  {
+    name: "South Korea",
+    visa:        { level: "easy",     label: "Visa-free (90 days)", detail: "Visa-free entry for most Western nationalities for up to 90 days." },
+    particular:  { level: "moderate", label: "International Driving Permit needed", detail: "An IDP is required to drive, similar to Japan; otherwise straightforward with no special legal restrictions on independent travel." },
+    stayLength:  { level: "easy",     label: "90 days", detail: "Standard visa-free tourist allowance." },
+    extendStay:  { level: "moderate", label: "Possible but not guaranteed", detail: "Extensions can be requested via an immigration office but are not simple or guaranteed for tourists." },
+    carnet:      { level: "hard",     label: "Ferries exist, but import rules block it", detail: "There's no usable land border, but international car ferries do connect South Korea to Japan and China (e.g. Incheon–Weihai/Dandong), so shipping a vehicle in by sea is physically possible. A formal carnet process is largely moot, though — South Korea's vehicle registration and safety-inspection requirements make legally using a foreign van difficult regardless of how it gets there." },
+    vehicleStay: { level: "hard",     label: "Impractical", detail: "Same reasoning — logistics of shipping make this impractical for casual travel." },
+    extendVeh:   { level: "hard",     label: "Impractical", detail: "N/A given the above." },
+    modernVeh:   { level: "moderate", label: "Excellent support, import logistics are the obstacle", detail: "Euro6 diesel is available and the Mercedes-Benz dealer network is strong — the real obstacle is the shipping/import logistics rather than mechanical support." },
+    roadQuality: { level: "easy",     label: "Excellent, brief monsoon flooding", detail: "Excellent, modern expressway network nationwide, very well maintained. The monsoon season (roughly July-August) can cause localized flooding but major roads are rarely closed for long." },
+  },
+];
+
+const levelClass = { easy: "easy", moderate: "moderate", hard: "hard" };
+
+const table = document.getElementById("table");
+let thead = "<tr><th>Country</th>";
+fields.forEach(f => thead += `<th>${f.label}</th>`);
+thead += "</tr>";
+table.innerHTML = thead;
+
+countries.forEach(c => {
+  const tr = document.createElement("tr");
+  const tdName = document.createElement("td");
+  tdName.className = "country";
+  tdName.textContent = c.name;
+  tr.appendChild(tdName);
+
+  fields.forEach(f => {
+    const data = c[f.key];
+    const td = document.createElement("td");
+    td.className = "cell " + levelClass[data.level];
+    td.textContent = data.label;
+    td.title = data.detail;
+    tr.appendChild(td);
+  });
+
+  table.appendChild(tr);
+});
+</script>
+
+</body>
+</html>

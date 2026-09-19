@@ -1,0 +1,146 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Best travel times by country</title>
+<style>
+  body {
+    font-family: -apple-system, Helvetica, Arial, sans-serif;
+    background: #f5f5f5;
+    padding: 20px;
+    font-size: 12px;
+  }
+  h1 {
+    color: #222;
+    font-size: 18px;
+  }
+  .legend {
+    margin: 10px 0 16px 0;
+  }
+  .legend span {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 3px;
+    color: white;
+    margin-right: 6px;
+    font-size: 11px;
+  }
+  table {
+    border-collapse: collapse;
+    background: white;
+  }
+  th, td {
+    border: 1px solid #ccc;
+    padding: 3px 6px;
+    text-align: center;
+  }
+  th {
+    background: #eee;
+    font-size: 11px;
+  }
+  td.country {
+    text-align: left;
+    font-weight: bold;
+    white-space: nowrap;
+    cursor: help;
+    background: #fafafa;
+  }
+  td.cell {
+    color: white;
+    font-size: 11px;
+    min-width: 26px;
+    position: relative;
+  }
+  td.cell .icon {
+    font-size: 11px;
+    line-height: 1;
+  }
+  .avoid { background: #c0392b; }
+  .ok { background: #e67e22; }
+  .ideal { background: #27ae60; }
+</style>
+</head>
+<body>
+
+<h1>Best travel times by country</h1>
+<div class="legend">
+  <span class="avoid">Avoid</span>
+  <span class="ok">OK</span>
+  <span class="ideal">Ideal</span>
+  &nbsp; (hover over the country name for details)
+</div>
+<div class="legend">
+  🔥 extreme heat &nbsp; ❄️ extreme cold &nbsp; 🌧️ extreme rain/monsoon
+</div>
+
+<table id="table"></table>
+
+<script>
+const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
+const classMap = {V:"avoid", O:"ok", I:"ideal"};
+const iconMap = {H:"🔥", C:"❄️", R:"🌧️"};
+
+const countries = [
+  { name: "Turkey",              codes: "OOIIOVVOIIOO", extra: ["","","","","","","H","H","","","",""], note: "Coast: avoid peak summer (heat); inland can be cold in winter." },
+  { name: "Iraq",                codes: "OIIOVVVVOIIO", extra: ["","","","","","H","H","H","H","","",""], note: "Extreme heat in summer (40-50°C)." },
+  { name: "Jordan",              codes: "OOIIOVVVIIOO", extra: ["","","","","","H","H","H","","","",""], note: "Summers very hot, winters can be cold/wet (especially Amman/Petra at night)." },
+  { name: "Saudi Arabia",        codes: "IIOOVVVVOOII", extra: ["","","","","H","H","H","H","","","",""], note: "Summers extremely hot; winter is most pleasant." },
+  { name: "UAE",                 codes: "IIOOVVVVOOII", extra: ["","","","","H","H","H","H","","","",""], note: "Summers extremely hot and humid." },
+  { name: "Oman",                codes: "IIOOVVVVOOII", extra: ["","","","","H","H","H","H","","","",""], note: "Summers extremely hot, especially inland." },
+  { name: "Georgia",             codes: "VVOOOIIIIOOV", extra: ["C","C","","","","","","","","","","C"], note: "Summer ideal, winter avoid (mountain passes closed)." },
+  { name: "Azerbaijan",          codes: "VVOOIIOOIIOV", extra: ["C","C","","","","","","","","","","C"], note: "Baku warm/windy in summer, winters cold." },
+  { name: "Russia – Caucasus",   codes: "VVOOOIIIIOOV", extra: ["C","C","","","","","","","","","","C"], note: "Mountain passes (e.g. Elbrus, Dagestan) only accessible in the summer half of the year." },
+  { name: "Kazakhstan",          codes: "VVOOIIVVIOOV", extra: ["C","C","","","","","H","H","","","","C"], note: "Continental climate: hot summers, very cold winters." },
+  { name: "Kyrgyzstan",          codes: "VVVOOIIIOOVV", extra: ["C","C","","","","","","","","","","C"], note: "Mountainous; high mountains only accessible in summer." },
+  { name: "Uzbekistan",          codes: "VOOIIOVVIIOV", extra: ["","","","","","","H","H","","","",""], note: "Spring/autumn ideal, summers extremely hot and dry." },
+  { name: "Turkmenistan",        codes: "VOOIIOVVIIOV", extra: ["","","","","","H","H","H","","","",""], note: "Desert climate, extreme summer heat." },
+  { name: "Tajikistan",          codes: "VVVOOIIIOOVV", extra: ["C","C","","","","","","","","","","C"], note: "Mountainous; the Pamir is only well accessible in summer." },
+  { name: "Afghanistan",         codes: "VVOIIIVVIIOV", extra: ["C","C","","","","","H","H","","","","C"], note: "Lowlands hot in summer, high mountains impassable in winter." },
+  { name: "Pakistan",            codes: "OOIIOVVVOIIO", extra: ["","","","","H","H","HR","HR","","","",""], note: "Avoid summer heat and monsoon (Jul-Aug, hot and very rainy)." },
+  { name: "India – Himalaya (Ladakh/Kashmir)", codes: "VVVOOIIIOOVV", extra: ["C","C","","","","","","","","","","C"], note: "Mountain passes only open in the summer half of the year; winters extremely cold." },
+  { name: "Nepal",               codes: "OIIOOVVVOIIO", extra: ["","","","","","R","R","R","","","",""], note: "Best trekking seasons: spring and autumn. Avoid monsoon and winter cold in the mountains." },
+  { name: "Bhutan",              codes: "OIIOOVVVOIIO", extra: ["","","","","","R","R","R","","","",""], note: "Similar to Nepal: avoid summer monsoon." },
+  { name: "India – North",       codes: "IIOOVVOOOIII", extra: ["","","","H","H","H","HR","HR","","","",""], note: "Avoid early-summer heat and monsoon; winter is pleasant and dry." },
+  { name: "India – South",       codes: "IIOOOOVVOOII", extra: ["","","","","","HR","HR","HR","","","",""], note: "Warmer climate, monsoon timed slightly differently than the north; winter ideal." },
+  { name: "Bangladesh",          codes: "IIOOOVVVVOOI", extra: ["","","","","","HR","HR","HR","HR","","",""], note: "Avoid monsoon (Jun-Sep); winter is dry and pleasant. Summer is hot and wet." },
+  { name: "Sri Lanka",           codes: "IIOOOOVVOOII", extra: ["","","","","","R","R","R","","","",""], note: "Two monsoons (southwest Jun-Aug, northeast Oct-Jan) hit different coasts; depends on region." },
+  { name: "Mongolia",            codes: "VVVOOIIIOOVV", extra: ["C","C","C","","","","","","","","C","C"], note: "Extreme continental climate: short warm summer (Jun-Aug) ideal for travel; winters brutally cold (down to -40°C) and many rural roads become impassable with snow/ice. Spring can bring dust storms and muddy thaw conditions." },
+  { name: "Russia – Baikal–Vladivostok", codes: "VVVOOIIIOOVV", extra: ["C","C","","","","","","","","","","C"], note: "Trans-Siberian route: summer/early autumn for Lake Baikal, extremely cold winters (-30°C)." },
+  { name: "China – North (Beijing)", codes: "VOIIOVVOIIOV", extra: ["C","","","","","","H","","","","","C"], note: "Cold winters, hot/humid summers; spring and autumn ideal." },
+  { name: "China – Central/Yangtze (Shanghai)", codes: "OOIIOVVVIIOO", extra: ["","","","","","","H","H","","","",""], note: "Humid subtropical, very hot/oppressive summers." },
+  { name: "China – South/Tibet", codes: "OIIOOOVVOIIO", extra: ["","","","","","HR","HR","HR","","","",""], note: "South: warm/humid year-round, summer monsoon (hot and wet). Tibet: only well accessible in summer (altitude)." },
+  { name: "Japan",               codes: "OIIIOVVOOIIO", extra: ["","","","","","R","R","","","","",""], note: "Cherry blossom (Mar-May) and autumn colors (Oct-Nov) ideal; avoid rainy season (Jun-Jul) and heat/typhoons in August." },
+  { name: "South Korea",         codes: "VOIIOOVVOIIV", extra: ["C","","","","","","HR","HR","","","",""], note: "Spring and autumn ideal, summer hot/humid (jangma monsoon), winter cold." },
+];
+
+const table = document.getElementById("table");
+let thead = "<tr><th>Country</th>";
+months.forEach(m => thead += `<th>${m}</th>`);
+thead += "</tr>";
+table.innerHTML = thead;
+
+countries.forEach(c => {
+  const tr = document.createElement("tr");
+  const tdName = document.createElement("td");
+  tdName.className = "country";
+  tdName.textContent = c.name;
+  tdName.title = c.note;
+  tr.appendChild(tdName);
+
+  for (let i = 0; i < 12; i++) {
+    const code = c.codes[i];
+    const td = document.createElement("td");
+    td.className = "cell " + classMap[code];
+    const extraCodes = c.extra ? c.extra[i] : "";
+    if (extraCodes && extraCodes !== "-") {
+      const icons = extraCodes.split("").map(ch => iconMap[ch] || "").join("");
+      td.innerHTML = `<span class="icon">${icons}</span>`;
+    }
+    tr.appendChild(td);
+  }
+  table.appendChild(tr);
+});
+</script>
+
+</body>
+</html>
