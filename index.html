@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Overland Travel Planner</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
@@ -111,7 +112,6 @@
     text-align: left;
     font-weight: bold;
     white-space: nowrap;
-    cursor: grab;
     background: #fafafa;
   }
   tr.dragging {
@@ -143,12 +143,55 @@
     word-break: break-word;
     padding: 4px 5px;
   }
-  td.remove-cell {
+  td.controls-cell {
     width: 1%;
+    background: #fafafa;
+    white-space: nowrap;
+    padding: 2px 4px;
+  }
+  .row-btn {
+    display: inline-block;
+    width: 24px;
+    height: 24px;
+    line-height: 22px;
+    padding: 0;
+    margin: 1px;
+    font-size: 12px;
+    text-align: center;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    background: white;
+    color: #555;
     cursor: pointer;
+  }
+  .row-btn.drag-handle {
+    cursor: grab;
+    touch-action: none;
+    font-size: 15px;
+    line-height: 20px;
+    user-select: none;
+    -webkit-user-select: none;
+  }
+  .row-btn.remove-btn {
     color: #a93226;
     font-weight: bold;
-    background: #fafafa;
+  }
+  /* keep the row number and country name visible while scrolling a wide table horizontally */
+  .table-wrap {
+    position: relative;
+  }
+  td.num, th:first-child {
+    position: sticky;
+    left: 0;
+    z-index: 2;
+  }
+  td.country, th:nth-child(2) {
+    position: sticky;
+    left: 24px;
+    z-index: 2;
+  }
+  th:first-child, th:nth-child(2) {
+    background: #eee;
   }
   /* complexity view: compact everything, wrap country names if needed */
   .view-complexity td.country {
@@ -258,6 +301,110 @@
   .site-footer a {
     color: #2c3e50;
   }
+
+  /* ---- Mobile ---- */
+  @media (max-width: 700px) {
+    body {
+      padding: 10px;
+    }
+    h1 {
+      font-size: 16px;
+    }
+    /* bigger, easier to tap touch targets */
+    .view-switch button,
+    .continent-picker button {
+      padding: 10px 14px;
+      font-size: 13px;
+      min-height: 40px;
+    }
+    /* smaller text for table headers (month labels) and country names so
+       there's more room left for the actual content on a narrow screen */
+    th {
+      font-size: 9px;
+      padding: 2px 3px;
+    }
+    td.country {
+      font-size: 10px;
+    }
+
+    /* Travel complexity view: the 9 wide text columns don't work as a
+       horizontally-scrolling table on a narrow screen, so turn each row
+       into a stacked card instead. The Best-travel-times view keeps the
+       normal table layout since its columns (months) are narrow and work
+       fine with horizontal scrolling. */
+    #table-wrap.view-complexity {
+      width: 100%;
+      flex: 1 1 100%;
+      max-width: 100%;
+      overflow-x: visible;
+    }
+    .view-complexity table,
+    .view-complexity tbody,
+    .view-complexity tr {
+      display: block;
+      width: 100%;
+    }
+    .view-complexity .header-row {
+      display: none;
+    }
+    .view-complexity tr {
+      position: relative;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      background: white;
+      margin-bottom: 10px;
+      padding: 34px 8px 8px 8px;
+    }
+    .view-complexity td {
+      display: block;
+      width: auto !important;
+      max-width: none !important;
+      border: none;
+      position: static;
+      padding: 4px 0;
+    }
+    .view-complexity td.num {
+      position: absolute;
+      top: 6px;
+      left: 6px;
+      width: 22px;
+      height: 22px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 0;
+    }
+    .view-complexity td.country {
+      padding-left: 34px;
+      font-size: 15px;
+      max-width: none;
+    }
+    .view-complexity td.cell.wide[data-label]::before {
+      content: attr(data-label) ": ";
+      font-weight: bold;
+      color: #555;
+    }
+    .view-complexity td.controls-cell {
+      position: absolute;
+      top: 4px;
+      right: 6px;
+      background: transparent;
+    }
+
+    /* on a small screen, show popups as a centered/bottom modal instead
+       of positioned near the tap point, which tends to run off-screen */
+    .popup-box.mobile-popup {
+      left: 50% !important;
+      top: auto !important;
+      bottom: 12px;
+      transform: translateX(-50%);
+      width: calc(100vw - 24px);
+      max-width: calc(100vw - 24px);
+      max-height: 70vh;
+      overflow-y: auto;
+    }
+  }
 </style>
 </head>
 <body>
@@ -303,7 +450,7 @@
 Hint: click on a cell to get more detailed info!</div>
 
 <div class="layout">
-  <div class="table-wrap">
+  <div class="table-wrap" id="table-wrap">
     <table id="table"></table>
     <div class="empty-hint" id="empty-hint" style="display:none;">
       No countries selected yet. Click a country on the map, or use the continent buttons above, to start building your table.
@@ -640,13 +787,15 @@ function updateMapMarkers() {
 
 // ---- Table rendering ----
 const table = document.getElementById("table");
+const tableWrap = document.getElementById("table-wrap");
 const emptyHint = document.getElementById("empty-hint");
 
 function renderTable() {
   emptyHint.style.display = order.length === 0 ? "block" : "none";
   table.style.display = order.length === 0 ? "none" : "";
   table.classList.toggle("view-complexity", currentView === "complexity");
-  let html = "<tr><th>#</th><th>Country</th>";
+  tableWrap.classList.toggle("view-complexity", currentView === "complexity");
+  let html = "<tr class=\"header-row\"><th>#</th><th>Country</th>";
   if (currentView === "climate") {
     months.forEach(m => html += `<th>${m}</th>`);
   } else {
@@ -659,7 +808,6 @@ function renderTable() {
     const c = unitById[id];
     if (!c) return;
     const tr = document.createElement("tr");
-    tr.draggable = true;
     tr.dataset.id = id;
 
     const tdNum = document.createElement("td");
@@ -708,6 +856,7 @@ function renderTable() {
     } else {
       complexityFields.forEach(f => {
         const td = document.createElement("td");
+        td.dataset.label = f.label;
         const data = c.complexity ? c.complexity[f.key] : null;
         if (data) {
           td.className = "cell wide " + data.level;
@@ -725,16 +874,28 @@ function renderTable() {
       });
     }
 
-    const tdRemove = document.createElement("td");
-    tdRemove.className = "remove-cell";
-    tdRemove.textContent = "✕";
-    tdRemove.title = "Remove from table";
-    tdRemove.addEventListener("click", (e) => {
+    const tdControls = document.createElement("td");
+    tdControls.className = "controls-cell";
+
+    const btnDrag = document.createElement("button");
+    btnDrag.className = "row-btn drag-handle";
+    btnDrag.textContent = "⠿";
+    btnDrag.title = "Drag to reorder";
+    btnDrag.setAttribute("aria-label", "Drag to reorder " + c.name);
+    tdControls.appendChild(btnDrag);
+
+    const btnRemove = document.createElement("button");
+    btnRemove.className = "row-btn remove-btn";
+    btnRemove.textContent = "✕";
+    btnRemove.title = "Remove from table";
+    btnRemove.addEventListener("click", (e) => {
       e.stopPropagation();
       removeUnit(id);
       refreshAll();
     });
-    tr.appendChild(tdRemove);
+    tdControls.appendChild(btnRemove);
+
+    tr.appendChild(tdControls);
 
     table.appendChild(tr);
   });
@@ -742,44 +903,73 @@ function renderTable() {
   attachDragHandlers();
 }
 
-// ---- Drag & drop reordering (native HTML5 DnD) ----
-let dragSrcId = null;
+// ---- Drag & drop reordering (Pointer Events — works for mouse & touch) ----
+// A small drag-handle button on each row/card starts the drag; the actual
+// reorder only happens once, on release, to avoid re-rendering (and
+// destroying) the dragged element mid-gesture.
+let dragState = null;
 
 function attachDragHandlers() {
-  const rows = table.querySelectorAll("tr[draggable]");
+  const rows = table.querySelectorAll("tr[data-id]");
   rows.forEach(row => {
-    row.addEventListener("dragstart", e => {
-      dragSrcId = row.dataset.id;
-      row.classList.add("dragging");
-      e.dataTransfer.effectAllowed = "move";
-    });
-    row.addEventListener("dragend", () => {
-      row.classList.remove("dragging");
-      rows.forEach(r => r.classList.remove("drag-over"));
-    });
-    row.addEventListener("dragover", e => {
-      e.preventDefault();
-      row.classList.add("drag-over");
-    });
-    row.addEventListener("dragleave", () => {
-      row.classList.remove("drag-over");
-    });
-    row.addEventListener("drop", e => {
-      e.preventDefault();
-      row.classList.remove("drag-over");
-      const targetId = row.dataset.id;
-      if (dragSrcId === null || targetId === dragSrcId) return;
-
-      const fromIdx = order.indexOf(dragSrcId);
-      const toIdx = order.indexOf(targetId);
-      order.splice(fromIdx, 1);
-      order.splice(toIdx, 0, dragSrcId);
-
-      renderTable();
-      updateMapMarkers();
-      updateUrl();
-    });
+    const handle = row.querySelector(".drag-handle");
+    if (!handle) return;
+    handle.addEventListener("pointerdown", (e) => startDrag(e, row));
   });
+}
+
+function autoScroll(clientY) {
+  const margin = 60;
+  const speed = 12;
+  if (clientY < margin) {
+    window.scrollBy(0, -speed);
+  } else if (clientY > window.innerHeight - margin) {
+    window.scrollBy(0, speed);
+  }
+}
+
+function startDrag(e, row) {
+  e.preventDefault();
+  const id = row.dataset.id;
+  dragState = { id, overId: id };
+  row.classList.add("dragging");
+
+  const onMove = (ev) => {
+    if (!dragState) return;
+    autoScroll(ev.clientY);
+    const targetEl = document.elementFromPoint(ev.clientX, ev.clientY);
+    const targetRow = targetEl && targetEl.closest("tr[data-id]");
+    table.querySelectorAll("tr.drag-over").forEach(r => r.classList.remove("drag-over"));
+    if (targetRow && targetRow.dataset.id !== dragState.id) {
+      targetRow.classList.add("drag-over");
+      dragState.overId = targetRow.dataset.id;
+    } else {
+      dragState.overId = dragState.id;
+    }
+  };
+
+  const onUp = () => {
+    document.removeEventListener("pointermove", onMove);
+    document.removeEventListener("pointerup", onUp);
+    document.removeEventListener("pointercancel", onUp);
+    table.querySelectorAll("tr.drag-over").forEach(r => r.classList.remove("drag-over"));
+    row.classList.remove("dragging");
+
+    if (dragState && dragState.overId && dragState.overId !== dragState.id) {
+      const fromIdx = order.indexOf(dragState.id);
+      const toIdx = order.indexOf(dragState.overId);
+      if (fromIdx !== -1 && toIdx !== -1) {
+        order.splice(fromIdx, 1);
+        order.splice(toIdx, 0, dragState.id);
+        refreshAll();
+      }
+    }
+    dragState = null;
+  };
+
+  document.addEventListener("pointermove", onMove);
+  document.addEventListener("pointerup", onUp);
+  document.addEventListener("pointercancel", onUp);
 }
 
 // ---- View switch ----
@@ -818,6 +1008,15 @@ function openPopup(title, content, evt) {
   }
   popupBox.style.display = "block";
   popupOverlay.classList.add("open");
+
+  const isMobile = window.innerWidth <= 700;
+  popupBox.classList.toggle("mobile-popup", isMobile);
+  if (isMobile) {
+    // let the CSS (bottom sheet, centered) take over positioning entirely
+    popupBox.style.left = "";
+    popupBox.style.top = "";
+    return;
+  }
 
   // position near the click, but keep inside the viewport
   const margin = 12;
