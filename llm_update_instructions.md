@@ -33,3 +33,9 @@ Important:
 }
 ---
 Swap in the country name and your actual nationality, and run it one country at a time (or batch a few similar ones, like the Gulf states together) so the model can focus and you can spot-check each result before pasting it back into the HTML files.
+
+If the "best travel time" info is also requested, use websites like www.columbusmagazine.nl/bestemming/azie/oezbekistan/ to get an idea of the best climate for travelling and make a classification in three categories, like currently used. Give months an extra mark for:
+- extreme heath
+- heavy rains
+- extreme cold
+- very busy with tourists (local or otherwise)

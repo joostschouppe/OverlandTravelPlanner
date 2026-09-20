@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
-<title>Travel planner – interactive</title>
+<title>Overland Travel Planner</title>
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
 <style>
   body {
@@ -46,6 +46,33 @@
     background: #2c3e50;
     color: white;
     border-color: #2c3e50;
+  }
+  .continent-picker {
+    margin: 10px 0 16px 0;
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    align-items: center;
+  }
+  .continent-picker button {
+    padding: 5px 12px;
+    font-size: 12px;
+    border: 1px solid #2c7a4b;
+    background: #eafaf0;
+    color: #1e6b3a;
+    cursor: pointer;
+    border-radius: 3px;
+  }
+  .continent-picker button:hover {
+    background: #d3f2df;
+  }
+  .continent-picker .clear-btn {
+    border-color: #c0392b;
+    background: #fdecea;
+    color: #a93226;
+  }
+  .continent-picker .clear-btn:hover {
+    background: #fad4d0;
   }
   .layout {
     display: flex;
@@ -94,10 +121,13 @@
     border-top: 2px solid #333;
   }
   td.cell {
-    color: white;
+    color: #333;
     font-size: 11px;
     width: 1%;
     position: relative;
+  }
+  td.cell:not(.avoid):not(.ok):not(.ideal):not(.hard):not(.moderate):not(.easy) {
+    background: #f9f9f9;
   }
   td.cell .icon {
     font-size: 11px;
@@ -112,16 +142,32 @@
     white-space: normal;
     word-break: break-word;
     padding: 4px 5px;
+  }
+  td.remove-cell {
+    width: 1%;
     cursor: pointer;
+    color: #a93226;
+    font-weight: bold;
+    background: #fafafa;
   }
   /* complexity view: compact everything, wrap country names if needed */
   .view-complexity td.country {
     white-space: normal;
     max-width: 160px;
   }
-  .avoid, .hard { background: #c0392b; }
-  .ok, .moderate { background: #e67e22; }
-  .ideal, .easy { background: #27ae60; }
+  .avoid, .hard { background: #c0392b; color: white; }
+  .ok, .moderate { background: #e67e22; color: white; }
+  .ideal, .easy { background: #27ae60; color: white; }
+
+  .empty-hint {
+    padding: 20px;
+    color: #888;
+    font-style: italic;
+    background: white;
+    border: 1px dashed #ccc;
+    border-radius: 4px;
+    max-width: 360px;
+  }
 
   #map-wrap {
     flex: 1 1 300px;
@@ -184,11 +230,39 @@
     border: none;
     background: none;
   }
+  .region-choice {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 4px 0;
+  }
+  .region-choice label {
+    cursor: pointer;
+  }
+  .site-footer {
+    margin: 32px 0 10px 0;
+    padding-top: 16px;
+    border-top: 1px solid #ccc;
+    color: #555;
+    max-width: 800px;
+    font-size: 12px;
+    line-height: 1.5;
+  }
+  .site-footer p {
+    margin: 8px 0;
+  }
+  .site-footer ul {
+    margin: 4px 0 8px 0;
+    padding-left: 20px;
+  }
+  .site-footer a {
+    color: #2c3e50;
+  }
 </style>
 </head>
 <body>
 
-<h1>Travel planner – interactive</h1>
+<h1>Overland Travel Planner</h1>
 
 <div class="view-switch">
   <button id="btn-climate" class="active">Best travel times</button>
@@ -200,10 +274,9 @@
     <span class="avoid">Avoid</span>
     <span class="ok">OK</span>
     <span class="ideal">Ideal</span>
-    &nbsp; (click the country name for details)
   </div>
   <div class="legend">
-    🔥 extreme heat &nbsp; ❄️ extreme cold &nbsp; 🌧️ extreme rain/monsoon
+    🔥 extreme heat &nbsp; ❄️ extreme cold &nbsp; 🌧️ extreme rain/monsoon &nbsp; 👥 overrun with tourists
   </div>
 </div>
 
@@ -212,15 +285,29 @@
     <span class="easy">Easy</span>
     <span class="moderate">Moderate</span>
     <span class="hard">Hard / restrictive</span>
-    &nbsp; (click a cell for full details)
   </div>
 </div>
 
-<div class="hint">Drag rows by the country name to change the order. The numbers on the map update live.</div>
+<div class="continent-picker">
+  <span>Add all countries in:</span>
+  <button data-continent="Africa">Africa</button>
+  <button data-continent="Asia">Asia</button>
+  <button data-continent="Europe">Europe</button>
+  <button data-continent="North America">North America</button>
+  <button data-continent="South America">South America</button>
+  <button data-continent="Oceania">Oceania</button>
+  <button class="clear-btn" id="btn-clear">Clear all</button>
+</div>
+
+<div class="hint">Build your own list: use the buttons above to add a whole continent, or click a country on the map to add just that one (hover to see its outline). Drag rows by the country name to reorder — your selection is saved in the URL.<br/>
+Hint: click on a cell to get more detailed info!</div>
 
 <div class="layout">
   <div class="table-wrap">
     <table id="table"></table>
+    <div class="empty-hint" id="empty-hint" style="display:none;">
+      No countries selected yet. Click a country on the map, or use the continent buttons above, to start building your table.
+    </div>
   </div>
   <div id="map-wrap">
     <div id="map"></div>
@@ -234,11 +321,27 @@
   <div id="popup-text"></div>
 </div>
 
+<footer class="site-footer">
+  <p>When planning an overland trip, there are a million things to think of. Here we tackle two aspects of trip planning:</p>
+  <ul>
+    <li>when is a good time to go? This is easy to find information, but interactive overviews are rare</li>
+    <li>what about the paperwork? Are the borders even open? Can you drive there at all? How long can you stay. This is hard to find information, and it changes all the time.</li>
+  </ul>
+  <p>Currently all the info is just sourced from Claude, so take it with a grain of salt. If you have any corrections, post <a href="https://github.com/joostschouppe/OverlandTravelPlanner/issues" target="_blank" rel="noopener">an issue</a> or do a pull request.</p>
+  <p>This site is open source and the data behind it will always remain open source.</p>
+</footer>
+
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script src="country_data/africa.js"></script>
+<script src="country_data/asia.js"></script>
+<script src="country_data/europe.js"></script>
+<script src="country_data/north_america.js"></script>
+<script src="country_data/south_america.js"></script>
+<script src="country_data/oceania.js"></script>
 <script>
 const months = ["JAN","FEB","MAR","APR","MAY","JUN","JUL","AUG","SEP","OCT","NOV","DEC"];
-const climateClassMap = {V:"avoid", O:"ok", I:"ideal"};
-const iconMap = {H:"🔥", C:"❄️", R:"🌧️"};
+const climateClassMap = { V: "avoid", O: "ok", I: "ideal" };
+const iconMap = { H: "🔥", C: "❄️", R: "🌧️", T: "👥" };
 
 const complexityFields = [
   { key: "visa",        label: "Visa" },
@@ -252,387 +355,73 @@ const complexityFields = [
   { key: "roadQuality", label: "Road quality" },
 ];
 
-// each entry has a stable id, so drag order, URL order and map markers stay in sync
-const countriesData = [
-  { id: 1,  name: "Turkey", lat: 39.0, lng: 35.0,
-    codes: "OOIIOVVOIIOO", extra: ["","","","","","","H","H","","","",""], note: "Coast: avoid peak summer (heat); inland can be cold in winter.",
-    visa:        { level: "easy",     label: "Visa-free / e-visa", detail: "Most EU/US/UK citizens enter visa-free up to 90 days. Some nationalities need an e-Visa, applied for online via the official evisa.gov.tr portal — approval typically takes minutes." },
-    particular:  { level: "easy",     label: "None", detail: "Self-driving is unrestricted nationwide. A few military/border zones in the southeast may have local access restrictions." },
-    stayLength:  { level: "easy",     label: "90 days / 180", detail: "90 days within any 180-day rolling period for most visa-free/e-visa nationalities." },
-    extendStay:  { level: "moderate", label: "Leave & re-enter", detail: "Extending from inside the country is generally not possible once the 90/180 allowance is used; most travelers exit and re-enter after the 180-day window resets, or apply for a residence permit for longer stays." },
-    carnet:      { level: "easy",     label: "Not required", detail: "A Carnet de Passage is not required for temporary vehicle import; a temporary import stamp is issued in the passport/vehicle documents at the border, though carrying a carnet can speed up the process." },
-    vehicleStay: { level: "easy",     label: "Matches visa (90 days)", detail: "The vehicle's permitted stay is tied to the driver's visa/stay duration, typically up to 90 days." },
-    extendVeh:   { level: "moderate", label: "Via customs office", detail: "Extensions are possible through a local customs office but require paperwork and are not guaranteed; many travelers instead export and re-import the vehicle." },
-    modernVeh:   { level: "easy",     label: "Good — Euro6 & Sprinter OK", detail: "Euro6 diesel is widely available in cities and along major highways. Mercedes-Benz has a domestic assembly plant and a solid dealer/service network; a Sprinter AWD can be serviced in most larger cities, though rural coverage is thinner." },
-    roadQuality: { level: "easy",     label: "Good, mixed terrain", detail: "Modern divided highways connect major cities; secondary/mountain roads in the east can be narrower and winding. Occasional flash flooding on the Black Sea coast; snow can close some interior/eastern mountain roads in winter." },
-  },
-  { id: 2,  name: "Iraq", lat: 33.0, lng: 44.0,
-    codes: "OIIOVVVVOIIO", extra: ["","","","","","H","H","H","H","","",""], note: "Extreme heat in summer (40-50°C).",
-    visa:        { level: "moderate", label: "e-visa / on arrival (KRG)", detail: "The Kurdistan Region (Erbil, Sulaymaniyah) offers visa-on-arrival for many nationalities. Federal Iraq requires a separate e-visa and is subject to more scrutiny and changing rules." },
-    particular:  { level: "hard",     label: "Security-restricted", detail: "Independent travel outside the Kurdistan Region is constrained by the security situation; permits, checkpoints, and in some cases a local escort/guide are advisable or required." },
-    stayLength:  { level: "moderate", label: "~30 days (KRG)", detail: "Typical Kurdistan Region visa-on-arrival validity is around 30 days; federal Iraq e-visa terms vary." },
-    extendStay:  { level: "hard",     label: "Difficult", detail: "Extensions require visiting an immigration office in the Kurdistan Region and are not straightforward; most travelers plan to exit before expiry instead." },
-    carnet:      { level: "moderate", label: "Recommended", detail: "Not universally enforced but strongly recommended given inconsistent customs practices at different border crossings." },
-    vehicleStay: { level: "moderate", label: "~30 days", detail: "Generally tied to the visa duration." },
-    extendVeh:   { level: "hard",     label: "Difficult", detail: "Complicated by both bureaucracy and the security situation; extending is not reliable." },
-    modernVeh:   { level: "hard",     label: "Limited support", detail: "Euro6 diesel and fuel quality are inconsistent; no meaningful dealer network for a European van; a large, distinctive foreign vehicle also draws unwanted attention in some areas." },
-    roadQuality: { level: "moderate", label: "Variable, checkpoints", detail: "Highways in the Kurdistan Region are in decent condition; roads elsewhere vary and are subject to frequent security checkpoints. Flash floods can occur in desert wadis after rare heavy rain." },
-  },
-  { id: 3,  name: "Jordan", lat: 31.0, lng: 36.0,
-    codes: "OOIIOVVVIIOO", extra: ["","","","","","H","H","H","","","",""], note: "Summers very hot, winters can be cold/wet (especially Amman/Petra at night).",
-    visa:        { level: "easy",     label: "Visa on arrival", detail: "Visa on arrival available for many nationalities at air and land borders (fee applies); the Jordan Pass bundles the visa fee with major site entries for eligible travelers." },
-    particular:  { level: "easy",     label: "None (guide only in Wadi Rum)", detail: "Self-driving is common and easy nationwide; only deep desert excursions in Wadi Rum require a local guide/4x4 driver." },
-    stayLength:  { level: "easy",     label: "30 days", detail: "Standard tourist visa validity is 30 days." },
-    extendStay:  { level: "moderate", label: "One extension, simple", detail: "A single extension is usually straightforward at a local police/immigration station; further extensions get more bureaucratic." },
-    carnet:      { level: "easy",     label: "Not required", detail: "A temporary import permit is issued at the border; a Carnet de Passage is not mandatory." },
-    vehicleStay: { level: "easy",     label: "Matches visa (30 days)", detail: "Tied to the visa duration, extendable similarly to the personal stay." },
-    extendVeh:   { level: "moderate", label: "Via customs, manageable", detail: "Possible through customs with some paperwork; generally manageable compared to neighboring countries." },
-    modernVeh:   { level: "easy",     label: "Good — Euro6 & Sprinter OK", detail: "Euro6 diesel available in Amman and along main routes; Mercedes has an established dealer presence in Amman capable of servicing a Sprinter." },
-    roadQuality: { level: "easy",     label: "Good, rare flash floods", detail: "Well-maintained paved highways (Desert Highway, King's Highway) connect major sites; occasional flash flooding around Wadi Rum/Petra after rare storms, but no recurring mountain-pass closures." },
-  },
-  { id: 4,  name: "Saudi Arabia", lat: 24.0, lng: 45.0,
-    codes: "IIOOVVVVOOII", extra: ["","","","","H","H","H","H","","","",""], note: "Summers extremely hot; winter is most pleasant.",
-    visa:        { level: "easy",     label: "e-visa online", detail: "Straightforward tourist e-visa introduced in 2019, available online for many nationalities within minutes to days." },
-    particular:  { level: "moderate", label: "Cultural/dress codes", detail: "Modest dress and behavior expectations apply; some military/border zones are restricted. Basic health/travel insurance is bundled automatically into the tourist e-visa fee." },
-    stayLength:  { level: "easy",     label: "90 days", detail: "Tourist e-visa typically allows stays up to 90 days, multiple entries within a year." },
-    extendStay:  { level: "moderate", label: "Possible, some hassle", detail: "Extensions can be arranged via the Absher platform/immigration but are not always simple for short-term tourists." },
-    carnet:      { level: "easy",     label: "Not typically required", detail: "A temporary import permit is issued for tourists driving on a valid e-visa; formal Carnet de Passage is not the norm for casual tourism." },
-    vehicleStay: { level: "easy",     label: "Matches visa (90 days)", detail: "Tied to the visa validity, with multiple entries possible within a year." },
-    extendVeh:   { level: "moderate", label: "Possible, some hassle", detail: "Similar process to personal stay extension." },
-    modernVeh:   { level: "easy",     label: "Excellent", detail: "Euro6 diesel widely available; one of the strongest Mercedes-Benz dealer networks in the region, fully capable of servicing a Sprinter AWD." },
-    roadQuality: { level: "easy",     label: "Excellent highways", detail: "Extensive modern, well-maintained highway network nationwide. Rare flash flooding in wadis near cities (e.g. Riyadh, Jeddah) after unusual storms; desert roads can have sand drifts." },
-  },
-  { id: 5,  name: "UAE", lat: 24.0, lng: 54.0,
-    codes: "IIOOVVVVOOII", extra: ["","","","","H","H","H","H","","","",""], note: "Summers extremely hot and humid.",
-    visa:        { level: "easy",     label: "Visa on arrival / free", detail: "Most nationalities receive visa-free entry or visa on arrival for 30-90 days." },
-    particular:  { level: "easy",     label: "Strict conduct laws", detail: "Strict laws around alcohol and public conduct apply but do not affect route planning." },
-    stayLength:  { level: "easy",     label: "30-90 days", detail: "Depends on nationality; commonly 30 or 90 days visa-free." },
-    extendStay:  { level: "easy",     label: "Simple online renewal", detail: "Extensions/renewals can be handled fairly easily online via GDRFA services." },
-    carnet:      { level: "easy",     label: "Not required", detail: "Temporary import permit issued at the border/customs for tourists; no carnet needed for typical visits." },
-    vehicleStay: { level: "easy",     label: "Matches visa", detail: "Tied to the visa duration, easily renewable." },
-    extendVeh:   { level: "easy",     label: "Simple", detail: "Extension process is straightforward through customs/GDRFA." },
-    modernVeh:   { level: "easy",     label: "Excellent", detail: "Euro6 diesel widely available; strong Mercedes-Benz dealer network; the Sprinter is a popular base for camper conversions in the UAE, so support is excellent." },
-    roadQuality: { level: "easy",     label: "Excellent, rare urban flooding", detail: "World-class highway network. Rare but occasionally severe urban flooding after unusual heavy rain events (e.g. Dubai 2024); Hajar mountain roads can close briefly after storms." },
-  },
-  { id: 6,  name: "Oman", lat: 21.0, lng: 57.0,
-    codes: "IIOOVVVVOOII", extra: ["","","","","H","H","H","H","","","",""], note: "Summers extremely hot, especially inland.",
-    visa:        { level: "easy",     label: "e-visa online", detail: "Straightforward e-visa process online for most nationalities." },
-    particular:  { level: "easy",     label: "None", detail: "Some off-road wadi routes warrant local advice/caution; otherwise no special legal restrictions." },
-    stayLength:  { level: "easy",     label: "30 days", detail: "Standard tourist e-visa validity, extendable." },
-    extendStay:  { level: "moderate", label: "Extension via ROP", detail: "Extensions available through Royal Oman Police, with some paperwork." },
-    carnet:      { level: "easy",     label: "Not required", detail: "Temporary import handled at the border without a formal carnet." },
-    vehicleStay: { level: "easy",     label: "Matches visa (30 days)", detail: "Tied to the visa, extendable similarly." },
-    extendVeh:   { level: "moderate", label: "Possible, some paperwork", detail: "Manageable but requires a visit to the relevant customs/police office." },
-    modernVeh:   { level: "moderate", label: "Good in cities", detail: "Euro6 diesel reliably available in Muscat and main towns, less certain in remote desert; Mercedes has a dealer presence in Muscat." },
-    roadQuality: { level: "moderate", label: "Good, flash-flood-prone wadis", detail: "Well-paved highways between main cities; mountain routes (Jebel Akhdar, Jebel Shams) are steep and can close after rare heavy rain — wadis flood quickly and dangerously ('wadi bashing' requires real caution)." },
-  },
-  { id: 7,  name: "Georgia", lat: 42.0, lng: 43.5,
-    codes: "VVOOOIIIIOOV", extra: ["C","C","","","","","","","","","","C"], note: "Summer ideal, winter avoid (mountain passes closed).",
-    visa:        { level: "easy",     label: "Visa-free (up to 1 yr)", detail: "Citizens of the EU, US, UK, and many other countries can enter visa-free for up to 365 days — one of the most generous visa-free allowances in the world." },
-    particular:  { level: "easy",     label: "None", detail: "Self-driving is fully allowed and common; Georgia is a well-established overlanding hub. Some breakaway regions (Abkhazia, South Ossetia) are off-limits without special permission." },
-    stayLength:  { level: "easy",     label: "365 days", detail: "Up to 365 days visa-free for most Western nationalities; some nationalities have shorter allowances (90 days) — check per passport." },
-    extendStay:  { level: "easy",     label: "Rarely needed", detail: "Given the long visa-free period, extension is rarely necessary. If needed, a simple border run to Armenia or Azerbaijan and back resets the counter for many nationalities." },
-    carnet:      { level: "easy",     label: "Not required", detail: "No Carnet de Passage required. A temporary import permit is issued at the border free of charge, matching the visa-free period." },
-    vehicleStay: { level: "easy",     label: "Matches visa (up to 1 yr)", detail: "Vehicle import is tied to the same visa-free duration as the driver, typically up to 365 days." },
-    extendVeh:   { level: "easy",     label: "Border run resets it", detail: "A short exit/re-entry (e.g. to Armenia or Azerbaijan) is a simple and commonly used way to reset both the personal and vehicle stay allowance." },
-    modernVeh:   { level: "moderate", label: "OK in cities, thin elsewhere", detail: "Euro6 diesel is available in Tbilisi and other larger cities but less consistent in rural/mountain areas. There is no official Mercedes Sprinter dealer network; independent workshops can generally handle common repairs, but specialized parts may need to be shipped in." },
-    roadQuality: { level: "moderate", label: "Good, mountain passes close in winter", detail: "Main highways are solid; mountain passes (e.g. the Georgian Military Highway/Jvari Pass) close in winter due to snow and can also close temporarily after rockslides. Some rural roads are rough gravel." },
-  },
-  { id: 8,  name: "Azerbaijan", lat: 40.4, lng: 47.5,
-    codes: "VVOOIIOOIIOV", extra: ["C","C","","","","","","","","","","C"], note: "Baku warm/windy in summer, winters cold.",
-    visa:        { level: "easy",     label: "e-visa (ASAN Visa)", detail: "Quick and easy online e-visa (ASAN Visa) for most nationalities, usually issued within days." },
-    particular:  { level: "moderate", label: "Restricted border areas", detail: "Some areas near the Armenian border/former conflict zones require permits or are off-limits." },
-    stayLength:  { level: "moderate", label: "30 days", detail: "Standard e-visa validity is 30 days." },
-    extendStay:  { level: "moderate", label: "Possible, some paperwork", detail: "Extensions available via the State Migration Service, involving some bureaucracy." },
-    carnet:      { level: "easy",     label: "Not required", detail: "Temporary import permit issued at the border, no formal carnet needed." },
-    vehicleStay: { level: "moderate", label: "~30 days", detail: "Tied to the visa duration." },
-    extendVeh:   { level: "moderate", label: "Possible, some paperwork", detail: "Similar process to extending personal stay." },
-    modernVeh:   { level: "moderate", label: "Baku only", detail: "Euro6 diesel available in Baku, less so in rural areas; no significant official Mercedes van dealer network outside the capital." },
-    roadQuality: { level: "moderate", label: "Good main roads, rough mountains", detail: "Good highways centered on Baku; mountainous regions toward the Georgian border and Greater Caucasus can have poor or unpaved sections and occasional seasonal closures/landslides." },
-  },
-  { id: 9,  name: "Russia – Caucasus", lat: 43.3, lng: 42.5,
-    codes: "VVOOOIIIIOOV", extra: ["C","C","","","","","","","","","","C"], note: "Mountain passes (e.g. Elbrus, Dagestan) only accessible in the summer half of the year.",
-    visa:        { level: "moderate", label: "Visa required", detail: "Most Western nationalities need a visa; Russia's unified e-visa system (available to many nationalities since 2023) has simplified the process considerably, though it is short-validity and single-entry. Traditional visas via invitation letter remain an option for longer stays. Flight connectivity and card payments are limited for some nationalities, but overlanders continue to transit and travel through Russia in practice — reports suggest the process, while bureaucratic, is manageable with preparation." },
-    particular:  { level: "moderate", label: "Registration & restricted zones", detail: "Some republics (e.g. Chechnya, Dagestan) require local registration and have specific travel advisories; some border zones need permits. Proof of travel/medical insurance is typically required as part of the visa application." },
-    stayLength:  { level: "moderate", label: "~30 days", detail: "Typical tourist visa validity." },
-    extendStay:  { level: "hard",     label: "Not realistic", detail: "Extension on a tourist visa is essentially not available; plan to exit before expiry." },
-    carnet:      { level: "moderate", label: "Not required, local insurance needed", detail: "A Carnet de Passage is not required; a temporary import declaration is made at the border as usual. International Green Card insurance is no longer accepted, so mandatory local OSAGO liability insurance must be purchased at the border instead — a known, solvable extra step rather than a fundamental blocker, according to several overlanders who have done it recently." },
-    vehicleStay: { level: "hard",     label: "Complex", detail: "Tied to visa duration but complicated in practice by the current situation." },
-    extendVeh:   { level: "hard",     label: "Not realistic", detail: "Not a reliable option currently." },
-    modernVeh:   { level: "moderate", label: "Parallel-import parts only", detail: "Official Mercedes-Benz dealer support has withdrawn due to sanctions, but a well-established parallel-import parts and service market has grown to fill the gap in major cities; slower and costlier than before, but not a dead end." },
-    roadQuality: { level: "moderate", label: "Variable, winter closures", detail: "Roads around Caucasus resort areas (Sochi, Elbrus) are decent; more remote mountain roads/passes are rougher, and heavy snow closes many routes in winter." },
-  },
-  { id: 10, name: "Russia – Baikal–Vladivostok", lat: 53.0, lng: 108.0,
-    codes: "VVVOOIIIOOVV", extra: ["C","C","","","","","","","","","","C"], note: "Trans-Siberian route: summer/early autumn for Lake Baikal, extremely cold winters (-30°C).",
-    visa:        { level: "moderate", label: "Visa required", detail: "Same country-wide visa system as the Caucasus entry — the unified e-visa has simplified things for many nationalities, though it is short and single-entry; longer stays still use an invitation-letter visa." },
-    particular:  { level: "moderate", label: "Vast distances, remote border zones", detail: "Some far-eastern border areas may have local restrictions; the sheer scale of the Trans-Siberian route is itself the main challenge." },
-    stayLength:  { level: "moderate", label: "~30 days", detail: "Typical tourist visa validity." },
-    extendStay:  { level: "hard",     label: "Not realistic", detail: "Same as elsewhere in Russia — plan to exit before visa expiry." },
-    carnet:      { level: "moderate", label: "Not required, local insurance needed", detail: "Same as the Caucasus entry — no carnet required, but mandatory local OSAGO liability insurance must be bought at the border since foreign Green Card insurance is no longer accepted." },
-    vehicleStay: { level: "moderate", label: "Tied to visa duration", detail: "Vehicle stay generally matches the visa duration, similar to the Caucasus entry." },
-    extendVeh:   { level: "moderate", label: "Possible, some bureaucracy", detail: "Similar process to extending the personal visa/stay." },
-    modernVeh:   { level: "moderate", label: "Parallel-import parts only, thinner in the far east", detail: "Same as the Caucasus entry — official Mercedes-Benz support has withdrawn, replaced by a parallel-import parts/service market; this thins out considerably the farther east you travel, so carrying spares is wise." },
-    roadQuality: { level: "moderate", label: "Good main route, extreme winters", detail: "The main Trans-Siberian highway (M55/M58/M60) is mostly paved and in reasonable condition, though quality drops in remote stretches. Extreme cold and ice make winter travel hazardous; some secondary roads near Baikal are unpaved." },
-  },
-  { id: 11, name: "Kazakhstan", lat: 48.0, lng: 68.0,
-    codes: "VVOOIIVVIOOV", extra: ["C","C","","","","","H","H","","","","C"], note: "Continental climate: hot summers, very cold winters.",
-    visa:        { level: "easy",     label: "Visa-free / e-visa", detail: "Visa-free for many Western nationalities up to 30 days; otherwise a straightforward e-visa process." },
-    particular:  { level: "moderate", label: "Vast distances", detail: "The main challenge is the huge distances and sparse fuel/services in remote steppe areas rather than any legal restriction." },
-    stayLength:  { level: "easy",     label: "30 days", detail: "Standard visa-free/e-visa allowance." },
-    extendStay:  { level: "moderate", label: "Possible, some bureaucracy", detail: "Extensions available via migration police, involving some paperwork." },
-    carnet:      { level: "moderate", label: "Recommended", detail: "Not strictly mandatory but carrying one is recommended for a smoother border crossing." },
-    vehicleStay: { level: "moderate", label: "~30 days, extendable", detail: "Tied to the visa duration." },
-    extendVeh:   { level: "moderate", label: "Possible, some bureaucracy", detail: "Similar process to personal stay extension." },
-    modernVeh:   { level: "moderate", label: "OK in cities", detail: "Euro6 diesel available in Almaty/Astana, scarce in remote steppe regions; Mercedes dealer presence exists in major cities only." },
-    roadQuality: { level: "moderate", label: "Improving, poor in remote areas", detail: "Highways connecting major cities are improving but can be poor/potholed, especially in the remote west; extreme winter conditions can close some roads. Flooding is not a major concern given the arid climate." },
-  },
-  { id: 12, name: "Kyrgyzstan", lat: 41.2, lng: 74.8,
-    codes: "VVVOOIIIOOVV", extra: ["C","C","","","","","","","","","","C"], note: "Mountainous; high mountains only accessible in summer.",
-    visa:        { level: "easy",     label: "Visa-free (up to 60 days)", detail: "Visa-free access for many nationalities, among the more relaxed regimes in Central Asia." },
-    particular:  { level: "moderate", label: "Some border permits", detail: "Some areas near the Tajik/Chinese borders may require permits." },
-    stayLength:  { level: "easy",     label: "60 days", detail: "Standard visa-free allowance for many nationalities." },
-    extendStay:  { level: "moderate", label: "Possible via migration service", detail: "Extensions available but involve some bureaucracy." },
-    carnet:      { level: "easy",     label: "Not required", detail: "Informal temporary import process at the border; no formal carnet needed." },
-    vehicleStay: { level: "moderate", label: "Tied to visa (60 days)", detail: "Extension possible with some effort." },
-    extendVeh:   { level: "moderate", label: "Possible, some effort", detail: "Similar process to personal stay extension." },
-    modernVeh:   { level: "hard",     label: "Limited outside Bishkek", detail: "Euro6 diesel scarce outside the capital; no Mercedes dealer network — independent mechanics only, and mountain routes are demanding on a large vehicle." },
-    roadQuality: { level: "hard",     label: "Scenic but rough, passes close in winter", detail: "Spectacular mountain roads, but many high passes (over 3000m) close with snow roughly October to May; landslides and spring-thaw damage can close roads temporarily." },
-  },
-  { id: 13, name: "Uzbekistan", lat: 41.0, lng: 64.0,
-    codes: "VOOIIOVVIIOV", extra: ["","","","","","","H","H","","","",""], note: "Spring/autumn ideal, summers extremely hot and dry.",
-    visa:        { level: "moderate", label: "e-visa required (online)", detail: "Most nationalities need an e-visa applied for in advance online (a handful of countries have short visa-free access). Processing usually takes a few business days; not something you can arrange on arrival." },
-    particular:  { level: "moderate", label: "Registration rules", detail: "Travelers are formally required to register their whereabouts (usually handled automatically by hotels); staying in unregistered accommodation for multiple nights can create issues on exit. Some border-adjacent zones are restricted." },
-    stayLength:  { level: "moderate", label: "30 days (e-visa)", detail: "Standard e-visa validity is 30 days for most nationalities." },
-    extendStay:  { level: "hard",     label: "Bureaucratic", detail: "Extending a tourist visa from inside the country is possible in theory but bureaucratic and not reliably guaranteed; most travelers plan their itinerary to fit within the 30-day window or exit/re-enter instead." },
-    carnet:      { level: "hard",     label: "Recommended/required", detail: "A Carnet de Passage is officially expected for temporary vehicle import, though enforcement varies by border crossing. Carrying one is strongly recommended to avoid delays or additional deposits at the border." },
-    vehicleStay: { level: "moderate", label: "Tied to visa (30 days)", detail: "Vehicle import permit duration is generally tied to the visa validity, i.e. around 30 days." },
-    extendVeh:   { level: "hard",     label: "Bureaucratic", detail: "Extending the vehicle's temporary import permit involves customs paperwork and is not straightforward; exiting and re-entering is often more practical than trying to extend in-country." },
-    modernVeh:   { level: "hard",     label: "Limited — plan spares", detail: "Euro6 diesel is scarce outside Tashkent and a few larger cities, and fuel quality can be inconsistent in remote areas. There is no meaningful Mercedes Sprinter dealer/service presence — carry spare parts and expect to rely on generalist mechanics for anything beyond basic repairs." },
-    roadQuality: { level: "moderate", label: "Good main routes, poor rural roads", detail: "Main highways between Tashkent-Samarkand-Bukhara are good and improving; rural/desert roads can be poor. No major flooding or pass-closure issues except in the Fann Mountains area." },
-  },
-  { id: 14, name: "Turkmenistan", lat: 39.0, lng: 59.0,
-    codes: "VOOIIOVVIIOV", extra: ["","","","","","H","H","H","","","",""], note: "Desert climate, extreme summer heat.",
-    visa:        { level: "hard",     label: "Invitation letter needed", detail: "Notoriously difficult: requires an official letter of invitation, and tourist visas are usually tied to a mandatory guided tour with a fixed itinerary." },
-    particular:  { level: "hard",     label: "Mandatory guide/itinerary", detail: "Independent travel is essentially not possible for tourists; a licensed guide and pre-approved route are required, with restrictions on photography in places. Mandatory travel insurance is also typically required as part of the visa process." },
-    stayLength:  { level: "hard",     label: "Short, fixed (5-10 days typical)", detail: "Tourist and transit visas are usually short and tied to the pre-approved itinerary." },
-    extendStay:  { level: "hard",     label: "Not realistic", detail: "The fixed-itinerary system leaves essentially no room for extension." },
-    carnet:      { level: "hard",     label: "Required, strictly enforced", detail: "A Carnet de Passage is required and enforced at the notoriously slow, strict border crossings." },
-    vehicleStay: { level: "hard",     label: "Short, fixed", detail: "Tied to the same short, inflexible visa itinerary." },
-    extendVeh:   { level: "hard",     label: "Not realistic", detail: "No practical mechanism to extend." },
-    modernVeh:   { level: "hard",     label: "Not supported", detail: "Euro6 diesel and consistent fuel quality are unavailable; no dealer network; extreme heat and remote desert distances are demanding on any vehicle." },
-    roadQuality: { level: "hard",     label: "Poor outside showcase routes", detail: "Some good showcase highways around Ashgabat, but many roads elsewhere are poor and potholed; Karakum desert crossings are rough tracks. Extreme heat and sandstorms are a bigger risk than flooding." },
-  },
-  { id: 15, name: "Tajikistan", lat: 38.9, lng: 71.0,
-    codes: "VVVOOIIIOOVV", extra: ["C","C","","","","","","","","","","C"], note: "Mountainous; the Pamir is only well accessible in summer.",
-    visa:        { level: "moderate", label: "e-visa + GBAO permit", detail: "e-visa available for many nationalities; a separate GBAO permit is required as an add-on for the Pamir Highway/Gorno-Badakhshan region." },
-    particular:  { level: "moderate", label: "GBAO permit for Pamirs", detail: "The Pamir Highway region requires the additional GBAO permit; otherwise the rest of the country is generally open to independent travel." },
-    stayLength:  { level: "easy",     label: "45 days (e-visa)", detail: "Typical e-visa validity." },
-    extendStay:  { level: "moderate", label: "Possible via OVIR", detail: "Extensions require a visit to the local OVIR (registration) office; manageable but takes time." },
-    carnet:      { level: "moderate", label: "Not formally required", detail: "Informal temporary import process at the border in most cases." },
-    vehicleStay: { level: "moderate", label: "Tied to visa", detail: "Generally matches the personal visa duration." },
-    extendVeh:   { level: "moderate", label: "Possible via OVIR", detail: "Similar process to personal stay extension." },
-    modernVeh:   { level: "hard",     label: "Very limited outside Dushanbe", detail: "Euro6 diesel virtually unavailable outside the capital; the Pamir Highway is extremely tough on any vehicle due to altitude, fuel quality and total lack of dealer support." },
-    roadQuality: { level: "hard",     label: "Pamir Highway rough, passes close", detail: "The iconic Pamir Highway is a rough mix of gravel and cracked asphalt, prone to landslides and washouts; high passes (over 4000m) can close with snow even in shoulder seasons. Other main roads are reasonable." },
-  },
-  { id: 16, name: "Afghanistan", lat: 34.0, lng: 66.0,
-    codes: "VVOIIIVVIIOV", extra: ["C","C","","","","","H","H","","","","C"], note: "Lowlands hot in summer, high mountains impassable in winter.",
-    visa:        { level: "hard",     label: "Very difficult / limited", detail: "Tourist visa issuance is extremely limited under the current government; most governments advise against all travel due to the security situation." },
-    particular:  { level: "hard",     label: "Security dominant factor", detail: "The security situation overrides all other planning; a local guide/fixer is effectively mandatory, women's travel is heavily restricted, and large areas are inaccessible." },
-    stayLength:  { level: "hard",     label: "Variable/short", detail: "Difficult to assess formally given the current situation." },
-    extendStay:  { level: "hard",     label: "Not realistic", detail: "Not a meaningful consideration given current circumstances." },
-    carnet:      { level: "hard",     label: "Not practically relevant", detail: "Self-driving into Afghanistan is not realistically advisable regardless of paperwork in place." },
-    vehicleStay: { level: "hard",     label: "Not practically relevant", detail: "Same reasoning as above." },
-    extendVeh:   { level: "hard",     label: "Not practically relevant", detail: "N/A under current conditions." },
-    modernVeh:   { level: "hard",     label: "Not a realistic destination", detail: "Fuel quality and infrastructure are very unpredictable; this is not currently a realistic overlanding destination." },
-    roadQuality: { level: "hard",     label: "Poor, conflict-affected, passes close", detail: "Roads are poor and deteriorating after decades of conflict and underinvestment. Mountain passes (e.g. Salang Pass) are prone to closure from snow/avalanches, and security checkpoints are frequent." },
-  },
-  { id: 17, name: "Pakistan", lat: 30.0, lng: 70.0,
-    codes: "OOIIOVVVOIIO", extra: ["","","","","H","H","HR","HR","","","",""], note: "Avoid summer heat and monsoon (Jul-Aug, hot and very rainy).",
-    visa:        { level: "moderate", label: "e-visa online", detail: "Generally straightforward e-visa process online for most nationalities in recent years." },
-    particular:  { level: "moderate", label: "NOC for some northern areas", detail: "A No Objection Certificate (NOC) is required for parts of Gilgit-Baltistan near sensitive borders; self-driving on the Karakoram Highway is otherwise increasingly common." },
-    stayLength:  { level: "moderate", label: "30-90 days", detail: "Depends on the visa category obtained." },
-    extendStay:  { level: "moderate", label: "Possible via immigration offices", detail: "Extensions available through NADRA/immigration offices in major cities." },
-    carnet:      { level: "moderate", label: "Recommended", detail: "Not always strictly enforced, but carrying one smooths customs procedures." },
-    vehicleStay: { level: "moderate", label: "Tied to visa", detail: "Generally matches the personal visa duration." },
-    extendVeh:   { level: "moderate", label: "Possible, some bureaucracy", detail: "Similar process to personal stay extension." },
-    modernVeh:   { level: "hard",     label: "Limited outside major cities", detail: "Euro6 diesel scarce outside Karachi/Lahore; Mercedes dealer presence limited to a few major cities, and servicing a Sprinter in the north is difficult." },
-    roadQuality: { level: "hard",     label: "KKH landslide-prone, monsoon flooding", detail: "The Karakoram Highway is iconic but subject to landslides, flash floods and monsoon damage with occasional multi-day closures. Southern highways are better maintained. Monsoon flooding is a recurring major risk (e.g. 2022 floods)." },
-  },
-  { id: 18, name: "India – Himalaya (Ladakh/Kashmir)", lat: 34.0, lng: 77.5,
-    codes: "VVVOOIIIOOVV", extra: ["C","C","","","","","","","","","","C"], note: "Mountain passes only open in the summer half of the year; winters extremely cold.",
-    visa:        { level: "moderate", label: "e-visa + Inner Line Permit", detail: "India's e-visa is generally straightforward, but Inner Line Permits/Protected Area Permits are required for parts of Ladakh near the China border and similar sensitive zones." },
-    particular:  { level: "hard",     label: "Permits, often via registered agent", detail: "ILP/PAP applications sometimes require a registered local agent; adds planning complexity for border-adjacent areas." },
-    stayLength:  { level: "easy",     label: "90/180 days (e-visa)", detail: "Typical e-visa validity for tourism." },
-    extendStay:  { level: "moderate", label: "Possible via FRRO", detail: "Extensions possible through the Foreigners Regional Registration Office but can be bureaucratic." },
-    carnet:      { level: "hard",     label: "Very restrictive in practice", detail: "Formal carnet requirements exist on paper, but temporary import of foreign-registered private vehicles into India is heavily restricted and rarely permitted in practice, regardless of paperwork." },
-    vehicleStay: { level: "hard",     label: "Very restrictive", detail: "Most foreign private vehicles are effectively not allowed extended stay without special, hard-to-obtain permission." },
-    extendVeh:   { level: "hard",     label: "Very restrictive", detail: "Not a realistic option for most travelers." },
-    modernVeh:   { level: "hard",     label: "Difficult at altitude", detail: "Euro6 diesel available in cities but unreliable in the high Himalaya; high-altitude passes are tough on any vehicle, and dealer support in remote Ladakh is essentially absent." },
-    roadQuality: { level: "hard",     label: "High passes, seasonal closures", detail: "Home to some of the highest motorable passes in the world (e.g. Khardung La); spectacular but prone to landslides, snow closures (many passes shut roughly October to May), and monsoon washouts on approach roads." },
-  },
-  { id: 19, name: "India – North", lat: 28.6, lng: 77.2,
-    codes: "IIOOVVOOOIII", extra: ["","","","H","H","H","HR","HR","","","",""], note: "Avoid early-summer heat and monsoon; winter is pleasant and dry.",
-    visa:        { level: "easy",     label: "e-visa online", detail: "Straightforward e-visa process for most nationalities." },
-    particular:  { level: "moderate", label: "Some border-area permits", detail: "Parts of border states may require additional permits." },
-    stayLength:  { level: "easy",     label: "90/180 days (e-visa)", detail: "Typical e-visa validity for tourism." },
-    extendStay:  { level: "moderate", label: "Possible via FRRO", detail: "Extensions possible but bureaucratic." },
-    carnet:      { level: "hard",     label: "Very restrictive in practice", detail: "As with the rest of India, private foreign-registered vehicle import is heavily restricted regardless of carnet paperwork." },
-    vehicleStay: { level: "hard",     label: "Very restrictive", detail: "Same country-wide restriction." },
-    extendVeh:   { level: "hard",     label: "Very restrictive", detail: "Not realistic for most travelers." },
-    modernVeh:   { level: "moderate", label: "Available but congested", detail: "Euro6 diesel widely available in northern cities; heavy traffic/congestion is the main challenge for a large vehicle like a Sprinter. Dealer network exists in major cities." },
-    roadQuality: { level: "moderate", label: "Good highways, monsoon disruption", detail: "The Golden Quadrilateral and other major highways are generally good and improving; monsoon (roughly June-September) can disrupt rural roads; heavy traffic congestion is nationwide." },
-  },
-  { id: 20, name: "India – South", lat: 13.0, lng: 77.5,
-    codes: "IIOOOOVVOOII", extra: ["","","","","","HR","HR","HR","","","",""], note: "Warmer climate, monsoon timed slightly differently than the north; winter ideal.",
-    visa:        { level: "easy",     label: "e-visa online", detail: "Same nationwide e-visa system as the rest of India." },
-    particular:  { level: "moderate", label: "None major", detail: "Generally open for independent travel; same country-wide vehicle-import restrictions apply." },
-    stayLength:  { level: "easy",     label: "90/180 days (e-visa)", detail: "Typical e-visa validity." },
-    extendStay:  { level: "moderate", label: "Possible via FRRO", detail: "Same process as elsewhere in India." },
-    carnet:      { level: "hard",     label: "Very restrictive in practice", detail: "Same country-wide restriction on private foreign vehicle import." },
-    vehicleStay: { level: "hard",     label: "Very restrictive", detail: "Same as North India." },
-    extendVeh:   { level: "hard",     label: "Very restrictive", detail: "Not realistic for most travelers." },
-    modernVeh:   { level: "moderate", label: "Available in major cities", detail: "Euro6 diesel available in Bangalore/Chennai and other major cities; traffic is heavy but road quality is generally good." },
-    roadQuality: { level: "moderate", label: "Good, monsoon flooding in places", detail: "Generally good highway network, well maintained in Karnataka/Tamil Nadu/Kerala. Monsoon (both southwest and northeast) can cause localized flooding, especially in Kerala; Western Ghats roads are narrow and winding." },
-  },
-  { id: 21, name: "Nepal", lat: 28.0, lng: 84.0,
-    codes: "OIIOOVVVOIIO", extra: ["","","","","","R","R","R","","","",""], note: "Best trekking seasons: spring and autumn. Avoid monsoon and winter cold in the mountains.",
-    visa:        { level: "easy",     label: "Visa on arrival", detail: "Visa on arrival for most nationalities, straightforward at the airport or main land borders." },
-    particular:  { level: "moderate", label: "Trekking permits; self-drive restricted", detail: "TIMS card/permits are required for trekking regions. Bringing a private foreign vehicle into Nepal is uncommon and heavily restricted in practice." },
-    stayLength:  { level: "easy",     label: "30/90 days", detail: "Depends on the visa option chosen on arrival." },
-    extendStay:  { level: "moderate", label: "Extensions at Immigration, Kathmandu", detail: "Extensions are available at the Department of Immigration in Kathmandu, with moderate paperwork." },
-    carnet:      { level: "hard",     label: "Rarely feasible", detail: "A carnet is technically the mechanism, but private foreign vehicle import into Nepal is rare and heavily restricted in practice." },
-    vehicleStay: { level: "hard",     label: "Rarely feasible", detail: "Same restriction as above." },
-    extendVeh:   { level: "hard",     label: "Rarely feasible", detail: "Not a realistic planning option for most private vehicles." },
-    modernVeh:   { level: "hard",     label: "Very limited support", detail: "Euro6 diesel available in Kathmandu only; mountain roads are very tough on vehicles; no Mercedes van dealer/service presence." },
-    roadQuality: { level: "hard",     label: "Landslide-prone, monsoon blockages", detail: "Kathmandu valley roads are decent, but most highways and mountain roads are narrow and landslide-prone; the monsoon (roughly June-September) frequently causes road blockages and washouts." },
-  },
-  { id: 22, name: "Bhutan", lat: 27.5, lng: 90.4,
-    codes: "OIIOOVVVOIIO", extra: ["","","","","","R","R","R","","","",""], note: "Similar to Nepal: avoid summer monsoon.",
-    visa:        { level: "hard",     label: "Pre-arranged via licensed operator", detail: "Visa must be arranged in advance through a licensed Bhutanese tour operator, alongside the mandatory Sustainable Development Fee; independent/self-guided travel is not permitted." },
-    particular:  { level: "hard",     label: "Mandatory licensed guide", detail: "Among the most restrictive regimes anywhere: a licensed guide and pre-arranged itinerary are mandatory for the entire visit; independent self-drive tourism is essentially disallowed." },
-    stayLength:  { level: "moderate", label: "Matches booked itinerary", detail: "Stay length is whatever is booked with the operator — flexible in principle but requires operator involvement to change." },
-    extendStay:  { level: "hard",     label: "Requires operator involvement", detail: "Extending is tied to the registered tour and requires coordination with the licensed operator." },
-    carnet:      { level: "hard",     label: "Not applicable for tourists", detail: "Private foreign vehicle self-drive is not offered to tourists; transport is arranged locally as part of the tour." },
-    vehicleStay: { level: "hard",     label: "Not applicable", detail: "Not a relevant category for typical visitors." },
-    extendVeh:   { level: "hard",     label: "Not applicable", detail: "N/A." },
-    modernVeh:   { level: "hard",     label: "Not applicable", detail: "Since self-drive with a private vehicle isn't offered, the question of Euro6/Sprinter support doesn't really apply — local operator vehicles are used instead." },
-    roadQuality: { level: "moderate", label: "Winding, monsoon landslides", detail: "Narrow, winding mountain roads, well engineered around Thimphu/Paro but landslide-prone elsewhere, with occasional closures during the monsoon (roughly June-September)." },
-  },
-  { id: 23, name: "Bangladesh", lat: 23.7, lng: 90.4,
-    codes: "IIOOOVVVVOOI", extra: ["","","","","","HR","HR","HR","HR","","",""], note: "Avoid monsoon (Jun-Sep); winter is dry and pleasant. Summer is hot and wet.",
-    visa:        { level: "moderate", label: "e-visa / visa on arrival", detail: "Available for many nationalities but process can be bureaucratic and inconsistent." },
-    particular:  { level: "moderate", label: "Dense traffic", detail: "Extreme traffic density is the main practical challenge rather than any formal restriction." },
-    stayLength:  { level: "easy",     label: "30 days", detail: "Typical tourist visa validity." },
-    extendStay:  { level: "moderate", label: "Via Immigration, Dhaka", detail: "Extensions possible but bureaucratic, handled through Immigration in Dhaka." },
-    carnet:      { level: "hard",     label: "Rarely feasible", detail: "Private overlanding through Bangladesh with a foreign vehicle is uncommon and complex due to border and infrastructure constraints." },
-    vehicleStay: { level: "hard",     label: "Rarely feasible", detail: "Land border crossing with a private foreign vehicle is uncommon and bureaucratically difficult." },
-    extendVeh:   { level: "hard",     label: "Rarely feasible", detail: "Not a realistic planning option for most travelers." },
-    modernVeh:   { level: "hard",     label: "Limited support", detail: "Euro6 diesel limited; extremely congested roads and monsoon flooding are tough on any vehicle logistics." },
-    roadQuality: { level: "hard",     label: "Flood-prone, congested", detail: "Large parts of the country are flood-prone during the monsoon (roughly June-September); roads are often congested and poorly maintained, with ferry crossings needed for many river routes." },
-  },
-  { id: 24, name: "Sri Lanka", lat: 7.9,  lng: 80.7,
-    codes: "IIOOOOVVOOII", extra: ["","","","","","R","R","R","","","",""], note: "Two monsoons (southwest Jun-Aug, northeast Oct-Jan) hit different coasts; depends on region.",
-    visa:        { level: "moderate", label: "ETA required in advance", detail: "An Electronic Travel Authorization must be obtained online before arrival; the process itself is straightforward." },
-    particular:  { level: "easy",     label: "None", detail: "Self-driving is possible though many tourists opt for a hired driver given local road conditions/customs." },
-    stayLength:  { level: "easy",     label: "30 days", detail: "Standard ETA validity, extendable." },
-    extendStay:  { level: "moderate", label: "Via Immigration, Colombo", detail: "Extensions available at the Department of Immigration in Colombo, with some bureaucracy." },
-    carnet:      { level: "hard",     label: "No land border — sea freight only", detail: "As an island there is no vehicle ferry service to Sri Lanka; the only land border option doesn't exist, so a private vehicle would need to go by cargo sea freight (not a roll-on/roll-off passenger car ferry). This is slow, costly and requires a temporary import bond, making it impractical for casual overlanding." },
-    vehicleStay: { level: "hard",     label: "Not practically applicable", detail: "Same reasoning — temporary import bonds and shipping costs make this impractical for casual travel." },
-    extendVeh:   { level: "hard",     label: "Not practically applicable", detail: "N/A given the above." },
-    modernVeh:   { level: "moderate", label: "Available in Colombo", detail: "Euro6 diesel available in Colombo, less so elsewhere; roads are narrow and congested, which is tough for a large van regardless of mechanical support." },
-    roadQuality: { level: "moderate", label: "Good main roads, monsoon landslides in hills", detail: "Coastal roads and modern expressways near Colombo are good; rural/hill roads are narrow and winding. Two monsoon seasons cause periodic flooding and landslides in the central highlands." },
-  },
-  { id: 25, name: "China – North (Beijing)", lat: 39.9, lng: 116.4,
-    codes: "VOIIOVVOIIOV", extra: ["C","","","","","","H","","","","","C"], note: "Cold winters, hot/humid summers; spring and autumn ideal.",
-    visa:        { level: "moderate", label: "Visa required (or limited visa-free)", detail: "A Chinese visa is traditionally required in advance and the process is paperwork-heavy, though some nationalities now have limited visa-free short-stay access under recent policy changes." },
-    particular:  { level: "hard",     label: "Self-drive requires licensed guide/escort", detail: "Foreign self-drive into China is essentially not permitted independently; it requires a Chinese guide/escort vehicle and special temporary permits arranged well in advance through a specialized agency — among the most restrictive systems in the world for this." },
-    stayLength:  { level: "moderate", label: "30-90 days (visa dependent)", detail: "Depends on visa type obtained." },
-    extendStay:  { level: "moderate", label: "Possible via local PSB", detail: "Extensions possible through the local Public Security Bureau but bureaucratic." },
-    carnet:      { level: "hard",     label: "Special permit system, not standard carnet", detail: "China does not operate on the usual Carnet de Passage system; foreign vehicle entry requires a bespoke temporary permit process together with a licensed guide, arranged via a specialized agency well in advance." },
-    vehicleStay: { level: "hard",     label: "Tightly controlled, time-limited", detail: "Vehicle stay is tightly controlled per the special permit and generally short." },
-    extendVeh:   { level: "hard",     label: "Difficult", detail: "Not straightforward given the bespoke permit system." },
-    modernVeh:   { level: "moderate", label: "Mechanically fine, bureaucracy is the obstacle", detail: "Euro6-equivalent diesel is available in major cities and there is a large official Mercedes-Benz dealer network in Beijing — the entry regulations, not the vehicle's mechanical suitability, are the real obstacle here." },
-    roadQuality: { level: "easy",     label: "Excellent, occasional winter ice", detail: "Excellent modern highway network around Beijing and northern China, well maintained and rarely affected by flooding; winter can bring icy conditions requiring caution." },
-  },
-  { id: 26, name: "China – Central/Yangtze (Shanghai)", lat: 31.2, lng: 121.5,
-    codes: "OOIIOVVVIIOO", extra: ["","","","","","","H","H","","","",""], note: "Humid subtropical, very hot/oppressive summers.",
-    visa:        { level: "moderate", label: "Visa required (or limited visa-free)", detail: "Same nationwide visa system as the rest of China." },
-    particular:  { level: "hard",     label: "Self-drive requires licensed guide/escort", detail: "Same nationwide restriction on independent foreign self-drive." },
-    stayLength:  { level: "moderate", label: "30-90 days (visa dependent)", detail: "Depends on visa type." },
-    extendStay:  { level: "moderate", label: "Possible via local PSB", detail: "Same process as elsewhere in China." },
-    carnet:      { level: "hard",     label: "Special permit system", detail: "Same bespoke permit and guide requirement as the rest of China." },
-    vehicleStay: { level: "hard",     label: "Tightly controlled, time-limited", detail: "Same nationwide restriction." },
-    extendVeh:   { level: "hard",     label: "Difficult", detail: "Same as elsewhere in China." },
-    modernVeh:   { level: "moderate", label: "Mechanically fine, bureaucracy is the obstacle", detail: "Shanghai has excellent infrastructure and a strong Mercedes-Benz presence; the entry permit system remains the main obstacle rather than mechanical support." },
-    roadQuality: { level: "moderate", label: "Excellent, occasional monsoon flooding", detail: "Excellent expressway network; some flooding risk in the low-lying Yangtze delta during heavy monsoon rains or typhoon season." },
-  },
-  { id: 27, name: "China – South/Tibet", lat: 25.0, lng: 102.0,
-    codes: "OIIOOOVVOIIO", extra: ["","","","","","HR","HR","HR","","","",""], note: "South: warm/humid year-round, summer monsoon (hot and wet). Tibet: only well accessible in summer (altitude).",
-    visa:        { level: "hard",     label: "Visa + Tibet Travel Permit", detail: "Same nationwide visa requirement, plus a mandatory additional Tibet Travel Permit for the Tibetan region — an extra layer not needed elsewhere in China." },
-    particular:  { level: "hard",     label: "Mandatory guide + fixed itinerary in Tibet", detail: "Tibet requires a licensed guide and a pre-arranged fixed itinerary for the entire visit, on top of the nationwide self-drive restrictions — the most restrictive part of China for independent travel." },
-    stayLength:  { level: "moderate", label: "30-90 days (visa dependent)", detail: "Depends on visa type; Tibet Travel Permit validity is typically tied to the booked itinerary." },
-    extendStay:  { level: "moderate", label: "Possible via local PSB (mainland)", detail: "Standard mainland process; Tibet itinerary changes require the booking agency." },
-    carnet:      { level: "hard",     label: "Special permit system, extra layer for Tibet", detail: "Same bespoke national permit/guide system, with the added Tibet Travel Permit requirement for that region." },
-    vehicleStay: { level: "hard",     label: "Tightly controlled, time-limited", detail: "Same nationwide restriction, more rigid in Tibet given the fixed-itinerary requirement." },
-    extendVeh:   { level: "hard",     label: "Difficult", detail: "Same as elsewhere in China, harder still in Tibet." },
-    modernVeh:   { level: "moderate", label: "Good in south, harder at altitude in Tibet", detail: "Southern Chinese cities have excellent infrastructure and Mercedes-Benz support; the Tibetan plateau's altitude and remoteness make vehicle support much thinner." },
-    roadQuality: { level: "moderate", label: "Good in south, high-altitude/Tibet harder", detail: "Southern China's expressways are generally good. Tibetan plateau roads have improved (many now paved), but high-altitude passes can close with snow, and landslides affect some routes in the rainy season; remote areas still have poor road conditions." },
-  },
-  { id: 28, name: "Japan", lat: 36.0, lng: 138.0,
-    codes: "OIIIOVVOOIIO", extra: ["","","","","","R","R","","","","",""], note: "Cherry blossom (Mar-May) and autumn colors (Oct-Nov) ideal; avoid rainy season (Jun-Jul) and heat/typhoons in August.",
-    visa:        { level: "easy",     label: "Visa-free (90 days)", detail: "Visa-free entry for most Western nationalities for up to 90 days." },
-    particular:  { level: "moderate", label: "International Driving Permit needed", detail: "Driving requires an International Driving Permit (1949 Geneva Convention type) or, for a few nationalities with bilateral agreements, a certified Japanese translation of the home license. Left-hand traffic. Infrastructure is otherwise excellent, with no special legal restrictions on independent travel." },
-    stayLength:  { level: "easy",     label: "90 days", detail: "Standard visa-free tourist allowance." },
-    extendStay:  { level: "hard",     label: "Not really extendable", detail: "The system isn't designed for tourist extensions — travelers are generally expected to leave at the end of the stay." },
-    carnet:      { level: "hard",     label: "Ferries exist, but import rules block it", detail: "International car ferries do connect Japan to South Korea (Busan–Shimonoseki/Fukuoka) and Russia (Vladivostok), so physically shipping a vehicle in is possible. The real obstacle is on the other side: Japan's strict, costly vehicle regulation and inspection ('shaken') system makes registering and legally using a foreign van impractical for most travelers, regardless of how it arrives." },
-    vehicleStay: { level: "hard",     label: "Impractical", detail: "Same reasoning as above." },
-    extendVeh:   { level: "hard",     label: "Impractical", detail: "N/A for most travelers." },
-    modernVeh:   { level: "moderate", label: "Good support, complex import rules", detail: "Official Mercedes-Benz dealers are present and could service a Sprinter, but importing and registering a foreign van requires meeting Japanese type-approval and the shaken inspection regime — complex and costly rather than mechanically difficult." },
-    roadQuality: { level: "easy",     label: "Excellent, seasonal snow/typhoon closures", detail: "Extremely well maintained nationwide, including mountainous regions. Some mountain passes close seasonally due to heavy snow (especially the Sea of Japan side and Hokkaido); typhoon season (roughly August-October) can cause temporary road closures/landslides." },
-  },
-  { id: 29, name: "South Korea", lat: 36.5, lng: 127.8,
-    codes: "VOIIOOVVOIIV", extra: ["C","","","","","","HR","HR","","","",""], note: "Spring and autumn ideal, summer hot/humid (jangma monsoon), winter cold.",
-    visa:        { level: "easy",     label: "Visa-free (90 days)", detail: "Visa-free entry for most Western nationalities for up to 90 days." },
-    particular:  { level: "moderate", label: "International Driving Permit needed", detail: "An IDP is required to drive, similar to Japan; otherwise straightforward with no special legal restrictions on independent travel." },
-    stayLength:  { level: "easy",     label: "90 days", detail: "Standard visa-free tourist allowance." },
-    extendStay:  { level: "moderate", label: "Possible but not guaranteed", detail: "Extensions can be requested via an immigration office but are not simple or guaranteed for tourists." },
-    carnet:      { level: "hard",     label: "Ferries exist, but import rules block it", detail: "There's no usable land border, but international car ferries do connect South Korea to Japan and China (e.g. Incheon–Weihai/Dandong), so shipping a vehicle in by sea is physically possible. A formal carnet process is largely moot, though — South Korea's vehicle registration and safety-inspection requirements make legally using a foreign van difficult regardless of how it gets there." },
-    vehicleStay: { level: "hard",     label: "Impractical", detail: "Same reasoning — logistics of shipping make this impractical for casual travel." },
-    extendVeh:   { level: "hard",     label: "Impractical", detail: "N/A given the above." },
-    modernVeh:   { level: "moderate", label: "Excellent support, import logistics are the obstacle", detail: "Euro6 diesel is available and the Mercedes-Benz dealer network is strong — the real obstacle is the shipping/import logistics rather than mechanical support." },
-    roadQuality: { level: "easy",     label: "Excellent, brief monsoon flooding", detail: "Excellent, modern expressway network nationwide, very well maintained. The monsoon season (roughly July-August) can cause localized flooding but major roads are rarely closed for long." },
-  },
-  { id: 30, name: "Mongolia", lat: 47.9, lng: 106.9,
-    codes: "VVVOOIIIOOVV", extra: ["C","C","C","","","","","","","","C","C"], note: "Extreme continental climate: short warm summer (Jun-Aug) ideal for travel; winters brutally cold (down to -40°C) and many rural roads become impassable with snow/ice. Spring can bring dust storms and muddy thaw conditions.",
-    visa:        { level: "easy",     label: "Visa-free / simple visa", detail: "Visa-free for many nationalities (commonly 30-90 days depending on passport) or a straightforward visa process otherwise." },
-    particular:  { level: "moderate", label: "Guide strongly advised", detail: "A guide is strongly recommended (though not legally mandatory) for remote steppe/desert self-drive, given the lack of signage, fuel stops and mobile coverage." },
-    stayLength:  { level: "easy",     label: "30-90 days", detail: "Depends on nationality." },
-    extendStay:  { level: "moderate", label: "Via Immigration Agency, Ulaanbaatar", detail: "Extensions possible through the Immigration Agency in the capital." },
-    carnet:      { level: "moderate", label: "Not formally required", detail: "Informal temporary import at land borders (mainly from Russia or China), though the crossings themselves can be slow and bureaucratic." },
-    vehicleStay: { level: "moderate", label: "Tied to visa, extendable", detail: "Generally matches the personal visa duration." },
-    extendVeh:   { level: "moderate", label: "Possible, some bureaucracy", detail: "Similar process to personal stay extension." },
-    modernVeh:   { level: "hard",     label: "Ulaanbaatar only", detail: "Euro6 diesel reliably available only in Ulaanbaatar; essentially no infrastructure or dealer support in the vast countryside — a high-clearance, mechanically simple vehicle is generally preferred over a large European van." },
-    roadQuality: { level: "hard",     label: "Mostly unpaved, mud/river crossings", detail: "Very few paved roads outside Ulaanbaatar and a handful of main highways; most travel is on unmarked steppe tracks, which become impassable mud after rain, and rivers can be un-fordable after snowmelt. No alpine-style pass closures, but weather can strand vehicles for days." },
-  },
-];
+// Build a very short one-line summary of a country's overall travel
+// complexity, purely derived from the level ("easy"/"moderate"/"hard") of
+// each of the 9 fields already in the data — no extra research needed.
+// e.g. "Mostly easy — watch out for: Carnet de Passage, Visa"
+function complexitySummary(c) {
+  if (!c.complexity) return null;
+  const levels = { easy: 0, moderate: 0, hard: 0 };
+  const hardLabels = [];
+  const moderateLabels = [];
+  complexityFields.forEach(f => {
+    const d = c.complexity[f.key];
+    if (!d) return;
+    levels[d.level] = (levels[d.level] || 0) + 1;
+    if (d.level === "hard") hardLabels.push(f.label);
+    else if (d.level === "moderate") moderateLabels.push(f.label);
+  });
+  const total = levels.easy + levels.moderate + levels.hard;
+  if (total === 0) return null;
 
-const byId = Object.fromEntries(countriesData.map(c => [c.id, c]));
+  let headline;
+  if (levels.hard === 0 && levels.moderate === 0) {
+    headline = "Easy overall";
+  } else if (levels.hard === 0) {
+    headline = "Mostly easy";
+  } else if (levels.hard >= total / 2) {
+    headline = "Hard overall";
+  } else {
+    headline = "Mixed";
+  }
 
-// default display order (new grouping: Mongolia + Baikal just before North China;
-// South India -> Bangladesh -> Sri Lanka kept together)
-const defaultOrder = [1,2,3,4,5,6,7,8,9,11,12,13,14,15,16,17,18,21,22,19,20,23,24,30,10,25,26,27,28,29];
+  const flagged = hardLabels.length ? hardLabels : moderateLabels;
+  if (flagged.length) {
+    headline += " — watch out for: " + flagged.slice(0, 3).join(", ");
+  }
+  return headline;
+}
 
-// ---- URL state (order + view) ----
-function readOrderFromUrl() {
+// Every unit is either a whole country, or (for a handful of huge countries
+// with very different climate zones) one region within a country. Data
+// fields are intentionally left blank for now — this is just the master
+// list of selectable units. `iso` is the ISO 3166-1 alpha-3 code used to
+// match against the map's GeoJSON country outlines (several regions can
+// share the same iso code, e.g. Russia's 3 regions).
+// Every unit is either a whole country, or (for a handful of huge countries
+// with very different climate zones) one region within a country. The
+// structural fields (id/iso/name/lat/lng) plus the actual travel data
+// (climate/complexity, possibly still null) live in per-continent files
+// under country_data/, loaded above and collected into window.COUNTRY_DATA.
+const UNITS = window.COUNTRY_DATA || [];
+
+const unitById = Object.fromEntries(UNITS.map(u => [u.id, u]));
+
+// iso code -> list of unit ids that belong to it (1 for normal countries,
+// several for split countries like Russia/USA/Canada/China/Brazil/etc.)
+const isoToUnitIds = {};
+UNITS.forEach(u => {
+  (isoToUnitIds[u.iso] = isoToUnitIds[u.iso] || []).push(u.id);
+});
+
+const CONTINENTS = ["Africa", "Asia", "Europe", "North America", "South America", "Oceania"];
+
+// ---- URL state (selection + order + view) ----
+function readSelectionFromUrl() {
   const params = new URLSearchParams(window.location.search);
-  const raw = params.get("order");
-  if (!raw) return null;
-  const ids = raw.split(",").map(Number).filter(n => !isNaN(n));
-  const validSet = new Set(countriesData.map(c => c.id));
-  if (ids.length !== countriesData.length) return null;
-  if (!ids.every(id => validSet.has(id))) return null;
-  if (new Set(ids).size !== ids.length) return null;
-  return ids;
+  const raw = params.get("sel");
+  if (!raw) return [];
+  return raw.split(",").filter(id => unitById[id]);
 }
 
 function readViewFromUrl() {
@@ -641,15 +430,10 @@ function readViewFromUrl() {
   return v === "complexity" ? "complexity" : "climate";
 }
 
-function buildShareUrl() {
-  const url = new URL(window.location.href);
-  url.searchParams.set("order", order.join(","));
-  url.searchParams.set("view", currentView);
-  return url;
-}
-
 function updateUrl() {
-  const url = buildShareUrl();
+  const url = new URL(window.location.href);
+  url.searchParams.set("sel", order.join(","));
+  url.searchParams.set("view", currentView);
   try {
     history.replaceState(null, "", url.pathname + url.search);
   } catch (e) {
@@ -657,41 +441,210 @@ function updateUrl() {
   }
 }
 
-let order = readOrderFromUrl() || defaultOrder.slice();
+let order = readSelectionFromUrl();
 let currentView = readViewFromUrl();
 
+function isSelected(id) {
+  return order.includes(id);
+}
+
+function addUnit(id) {
+  if (!unitById[id] || isSelected(id)) return;
+  order.push(id);
+}
+
+function removeUnit(id) {
+  const idx = order.indexOf(id);
+  if (idx !== -1) order.splice(idx, 1);
+}
+
+function toggleUnit(id) {
+  if (isSelected(id)) removeUnit(id); else addUnit(id);
+}
+
+function refreshAll() {
+  renderTable();
+  updateMapSelection();
+  updateUrl();
+}
+
+// ---- Continent quick-add ----
+document.querySelectorAll(".continent-picker button[data-continent]").forEach(btn => {
+  btn.addEventListener("click", () => {
+    const continent = btn.dataset.continent;
+    UNITS.filter(u => u.continent === continent).forEach(u => addUnit(u.id));
+    refreshAll();
+  });
+});
+document.getElementById("btn-clear").addEventListener("click", () => {
+  order = [];
+  refreshAll();
+});
+
 // ---- Map setup ----
-const map = L.map('map').setView([35, 80], 3);
+const map = L.map('map').setView([25, 20], 2);
 L.tileLayer('https://tile.opentopomap.org/{z}/{x}/{y}.png', {
   maxZoom: 17,
   attribution: 'Map data: &copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors, <a href="http://viewfinderpanoramas.org">SRTM</a> | Map style: &copy; <a href="https://opentopomap.org">OpenTopoMap</a> (<a href="https://creativecommons.org/licenses/by-sa/3.0/">CC-BY-SA</a>)'
 }).addTo(map);
 
-const markers = {};
-countriesData.forEach(c => {
-  const marker = L.marker([c.lat, c.lng], {
-    icon: L.divIcon({ className: '', html: '', iconSize: [24,24] })
-  }).addTo(map);
-  marker.bindTooltip(c.name, { permanent: false });
-  markers[c.id] = marker;
-});
+const countryStyle = {
+  weight: 1,
+  color: "#3a6f4d",
+  fillColor: "#a9d8b8",
+  fillOpacity: 0.15,
+};
+const hoverStyle = {
+  weight: 2,
+  color: "#1e6b3a",
+  fillColor: "#6fbf8f",
+  fillOpacity: 0.45,
+};
+const selectedStyle = {
+  weight: 2,
+  color: "#2c3e50",
+  fillColor: "#2c3e50",
+  fillOpacity: 0.35,
+};
 
-function updateMapNumbers() {
+let geoLayer = null;
+const layersByIso = {};
+
+fetch("https://raw.githubusercontent.com/johan/world.geo.json/master/countries.geo.json")
+  .then(r => r.json())
+  .then(geo => {
+    geoLayer = L.geoJSON(geo, {
+      style: feature => (isoToUnitIds[feature.id] ? countryStyle : { weight: 0, fillOpacity: 0 }),
+      filter: feature => !!isoToUnitIds[feature.id],
+      onEachFeature: (feature, layer) => {
+        const iso = feature.id;
+        layersByIso[iso] = layer;
+        layer.on({
+          mouseover: () => {
+            const anySelected = (isoToUnitIds[iso] || []).some(isSelected);
+            layer.setStyle(anySelected ? selectedStyle : hoverStyle);
+            layer.bindTooltip(feature.properties.name, { sticky: true }).openTooltip();
+          },
+          mouseout: () => {
+            applyIsoStyle(iso);
+          },
+          click: (e) => handleCountryClick(iso, e.originalEvent),
+        });
+      },
+    }).addTo(map);
+  })
+  .catch(err => console.error("Failed to load country outlines:", err));
+
+function applyIsoStyle(iso) {
+  const layer = layersByIso[iso];
+  if (!layer) return;
+  const anySelected = (isoToUnitIds[iso] || []).some(isSelected);
+  layer.setStyle(anySelected ? selectedStyle : countryStyle);
+}
+
+function updateMapSelection() {
+  Object.keys(layersByIso).forEach(applyIsoStyle);
+  updateMapMarkers();
+}
+
+function handleCountryClick(iso, evt) {
+  const unitIds = isoToUnitIds[iso] || [];
+  if (unitIds.length === 0) return;
+  if (unitIds.length === 1) {
+    toggleUnit(unitIds[0]);
+    refreshAll();
+    return;
+  }
+  openRegionChooser(iso, unitIds, evt);
+}
+
+function openRegionChooser(iso, unitIds, evt) {
+  const countryName = unitById[unitIds[0]].name.split(" – ")[0];
+  const container = document.createElement("div");
+  unitIds.forEach(id => {
+    const unit = unitById[id];
+    const row = document.createElement("div");
+    row.className = "region-choice";
+    const checkbox = document.createElement("input");
+    checkbox.type = "checkbox";
+    checkbox.id = "region-" + id;
+    checkbox.checked = isSelected(id);
+    checkbox.addEventListener("change", () => {
+      toggleUnit(id);
+      refreshAll();
+    });
+    const label = document.createElement("label");
+    label.htmlFor = checkbox.id;
+    label.textContent = unit.name;
+    row.appendChild(checkbox);
+    row.appendChild(label);
+    container.appendChild(row);
+  });
+  openPopup(`${countryName} — pick region(s)`, container, evt);
+}
+
+// numbered markers, similar to the previous version, but only for
+// currently selected units, positioned in current table order
+const markers = {};
+// a line from marker 1 -> 2 -> 3 ... to give a rough idea of the planned route
+let routeLine = null;
+
+function updateMapMarkers() {
+  Object.keys(markers).forEach(id => {
+    if (!isSelected(id)) {
+      map.removeLayer(markers[id]);
+      delete markers[id];
+    }
+  });
   order.forEach((id, idx) => {
+    const unit = unitById[id];
+    if (!unit) return;
     const num = idx + 1;
+    if (!markers[id]) {
+      markers[id] = L.marker([unit.lat, unit.lng], {
+        icon: L.divIcon({ className: '', html: '', iconSize: [24, 24] }),
+      }).addTo(map);
+      markers[id].bindTooltip(unit.name, { permanent: false });
+      markers[id].on("click", () => {
+        removeUnit(id);
+        refreshAll();
+      });
+    }
     markers[id].setIcon(L.divIcon({
       className: '',
       html: `<div class="num-icon">${num}</div>`,
-      iconSize: [24,24],
-      iconAnchor: [12,12]
+      iconSize: [24, 24],
+      iconAnchor: [12, 12],
     }));
   });
+
+  const routeLatLngs = order
+    .map(id => unitById[id])
+    .filter(Boolean)
+    .map(u => [u.lat, u.lng]);
+
+  if (routeLine) {
+    map.removeLayer(routeLine);
+    routeLine = null;
+  }
+  if (routeLatLngs.length > 1) {
+    routeLine = L.polyline(routeLatLngs, {
+      color: "#2c3e50",
+      weight: 2,
+      opacity: 0.7,
+      dashArray: "6 6",
+    }).addTo(map);
+    routeLine.bringToBack();
+  }
 }
 
 // ---- Table rendering ----
 const table = document.getElementById("table");
+const emptyHint = document.getElementById("empty-hint");
 
 function renderTable() {
+  emptyHint.style.display = order.length === 0 ? "block" : "none";
+  table.style.display = order.length === 0 ? "none" : "";
   table.classList.toggle("view-complexity", currentView === "complexity");
   let html = "<tr><th>#</th><th>Country</th>";
   if (currentView === "climate") {
@@ -699,11 +652,12 @@ function renderTable() {
   } else {
     complexityFields.forEach(f => html += `<th>${f.label}</th>`);
   }
-  html += "</tr>";
+  html += "<th></th></tr>";
   table.innerHTML = html;
 
   order.forEach((id, idx) => {
-    const c = byId[id];
+    const c = unitById[id];
+    if (!c) return;
     const tr = document.createElement("tr");
     tr.draggable = true;
     tr.dataset.id = id;
@@ -716,40 +670,71 @@ function renderTable() {
     const tdName = document.createElement("td");
     tdName.className = "country";
     tdName.textContent = c.name;
-    if (currentView === "climate" && c.note) {
+    if (currentView === "climate" && c.climate && c.climate.note) {
       tdName.style.cursor = "pointer";
       tdName.addEventListener("click", (e) => {
         e.stopPropagation();
-        openPopup(c.name, c.note, e);
+        openPopup(c.name, c.climate.note, e);
       });
+    } else if (currentView === "complexity") {
+      const summary = complexitySummary(c);
+      if (summary) {
+        tdName.style.cursor = "pointer";
+        tdName.addEventListener("click", (e) => {
+          e.stopPropagation();
+          openPopup(c.name, summary, e);
+        });
+      }
     }
     tr.appendChild(tdName);
 
     if (currentView === "climate") {
       for (let i = 0; i < 12; i++) {
-        const code = c.codes[i];
         const td = document.createElement("td");
-        td.className = "cell " + climateClassMap[code];
-        const extraCodes = c.extra ? c.extra[i] : "";
-        if (extraCodes && extraCodes !== "-") {
-          const icons = extraCodes.split("").map(ch => iconMap[ch] || "").join("");
-          td.innerHTML = `<span class="icon">${icons}</span>`;
+        if (c.climate) {
+          const code = c.climate.codes[i];
+          td.className = "cell " + (climateClassMap[code] || "");
+          const extraCodes = c.climate.extra ? c.climate.extra[i] : "";
+          if (extraCodes) {
+            const icons = extraCodes.split("").map(ch => iconMap[ch] || "").join("");
+            td.innerHTML = `<span class="icon">${icons}</span>`;
+          }
+        } else {
+          td.className = "cell";
+          td.textContent = "–";
         }
         tr.appendChild(td);
       }
     } else {
       complexityFields.forEach(f => {
-        const data = c[f.key];
         const td = document.createElement("td");
-        td.className = "cell wide " + data.level;
-        td.textContent = data.label;
-        td.addEventListener("click", (e) => {
-          e.stopPropagation();
-          openPopup(`${c.name} — ${f.label}`, data.detail, e);
-        });
+        const data = c.complexity ? c.complexity[f.key] : null;
+        if (data) {
+          td.className = "cell wide " + data.level;
+          td.textContent = data.label;
+          td.style.cursor = "pointer";
+          td.addEventListener("click", (e) => {
+            e.stopPropagation();
+            openPopup(`${c.name} — ${f.label}`, data.detail, e);
+          });
+        } else {
+          td.className = "cell wide";
+          td.textContent = "–";
+        }
         tr.appendChild(td);
       });
     }
+
+    const tdRemove = document.createElement("td");
+    tdRemove.className = "remove-cell";
+    tdRemove.textContent = "✕";
+    tdRemove.title = "Remove from table";
+    tdRemove.addEventListener("click", (e) => {
+      e.stopPropagation();
+      removeUnit(id);
+      refreshAll();
+    });
+    tr.appendChild(tdRemove);
 
     table.appendChild(tr);
   });
@@ -764,7 +749,7 @@ function attachDragHandlers() {
   const rows = table.querySelectorAll("tr[draggable]");
   rows.forEach(row => {
     row.addEventListener("dragstart", e => {
-      dragSrcId = Number(row.dataset.id);
+      dragSrcId = row.dataset.id;
       row.classList.add("dragging");
       e.dataTransfer.effectAllowed = "move";
     });
@@ -782,7 +767,7 @@ function attachDragHandlers() {
     row.addEventListener("drop", e => {
       e.preventDefault();
       row.classList.remove("drag-over");
-      const targetId = Number(row.dataset.id);
+      const targetId = row.dataset.id;
       if (dragSrcId === null || targetId === dragSrcId) return;
 
       const fromIdx = order.indexOf(dragSrcId);
@@ -791,7 +776,7 @@ function attachDragHandlers() {
       order.splice(toIdx, 0, dragSrcId);
 
       renderTable();
-      updateMapNumbers();
+      updateMapMarkers();
       updateUrl();
     });
   });
@@ -816,16 +801,21 @@ function setView(view) {
 btnClimate.addEventListener("click", () => setView("climate"));
 btnComplexity.addEventListener("click", () => setView("complexity"));
 
-// ---- Click popups (replace hover tooltips) ----
+// ---- Click popups ----
 const popupOverlay = document.getElementById("popup-overlay");
 const popupBox = document.getElementById("popup-box");
 const popupTitle = document.getElementById("popup-title");
 const popupText = document.getElementById("popup-text");
 const popupClose = document.getElementById("popup-close");
 
-function openPopup(title, text, evt) {
+function openPopup(title, content, evt) {
   popupTitle.textContent = title;
-  popupText.textContent = text;
+  popupText.innerHTML = "";
+  if (typeof content === "string") {
+    popupText.textContent = content;
+  } else {
+    popupText.appendChild(content);
+  }
   popupBox.style.display = "block";
   popupOverlay.classList.add("open");
 
@@ -839,7 +829,6 @@ function openPopup(title, text, evt) {
   popupBox.style.left = x + "px";
   popupBox.style.top = y + "px";
 
-  // clamp vertically after render (box height depends on content)
   requestAnimationFrame(() => {
     const rect = popupBox.getBoundingClientRect();
     if (rect.bottom > window.innerHeight - margin) {
@@ -861,7 +850,7 @@ document.addEventListener("keydown", (e) => {
 
 // ---- Init ----
 setView(currentView);
-updateMapNumbers();
+updateMapMarkers();
 updateUrl();
 </script>
 
